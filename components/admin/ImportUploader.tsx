@@ -49,6 +49,7 @@ const CRM_FIELDS = [
   { value: 'volunteer_stage', label: 'Volunteer Stage' },
   { value: 'donor_stage', label: 'Donor Stage' },
   { value: 'support_level', label: 'Support Level (1–5)' },
+  { value: 'date_added', label: 'Date Added / Created On' },
 ]
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -104,16 +105,26 @@ function guessFieldMapping(columnName: string): string {
   if (col === 'email') return 'email'
   if (col === 'first name' || col === 'first_name' || col === 'firstname') return 'first_name'
   if (col === 'last name' || col === 'last_name' || col === 'lastname') return 'last_name'
-  if (col === 'phone' || col === 'phone number' || col === 'shipping phone number' || col === 'billing phone number' || col === 'mobile') return 'phone'
-  if (col === 'shipping city' || col === 'billing city' || col === 'city' || col === 'town') return 'town'
-  if (col === 'shipping province/state' || col === 'billing province/state' || col === 'state' || col === 'province') return 'state'
-  if (col === 'shipping zip' || col === 'billing zip' || col === 'zip' || col === 'zip code' || col === 'postal code') return 'zip'
+  // Shipping = physical address → map to CRM fields
+  if (col === 'shipping phone number') return 'phone'
+  if (col === 'shipping city') return 'town'
+  if (col === 'shipping province/state') return 'state'
+  if (col === 'shipping zip') return 'zip'
+  // Billing = payment address → ignore by default
+  if (col.startsWith('billing')) return 'ignore'
+  if (col === 'shipping name' || col === 'shipping address 1' || col === 'shipping address 2' || col === 'shipping country') return 'ignore'
+  // Generic address fields
+  if (col === 'phone' || col === 'phone number' || col === 'mobile') return 'phone'
+  if (col === 'city' || col === 'town') return 'town'
+  if (col === 'state' || col === 'province') return 'state'
+  if (col === 'zip' || col === 'zip code' || col === 'postal code') return 'zip'
   if (col === 'county') return 'county'
   if (col === 'congressional district') return 'congressional_district'
   if (col === 'mailing lists') return 'mailing_lists'
   if (col === 'accepts marketing') return 'accepts_marketing'
   if (col === 'donation count') return 'donation_count'
   if (col === 'total donation amount') return 'donation_amount'
+  if (col === 'created on') return 'date_added'
   if (col === 'notes' || col === 'note') return 'notes'
   if (col.includes('discord')) return 'discord_username'
   if (col === 'tags') return 'notes'
@@ -171,6 +182,11 @@ function applyFieldMap(row: ParsedRow, fieldMap: FieldMap, sourceForm: string): 
       case 'donation_amount':
         if (parseFloat(val) > 0) { contact.is_donor = true; contact.donor_stage = 'Donated'; contact.is_supporter = true }
         break
+      case 'date_added': {
+        const parsed = new Date(val)
+        if (!isNaN(parsed.getTime())) contact.date_added = parsed.toISOString().split('T')[0]
+        break
+      }
       case 'newsletter_subscriber':
       case 'is_volunteer':
       case 'is_donor':
