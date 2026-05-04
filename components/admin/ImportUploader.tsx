@@ -25,6 +25,7 @@ const SOURCE_FORMS = [
 
 const CRM_FIELDS = [
   { value: 'ignore', label: '— Ignore this column —' },
+  { value: 'full_name', label: 'Full Name → split into first + last' },
   { value: 'first_name', label: 'First Name' },
   { value: 'last_name', label: 'Last Name' },
   { value: 'email', label: 'Email' },
@@ -34,10 +35,12 @@ const CRM_FIELDS = [
   { value: 'zip', label: 'ZIP Code' },
   { value: 'county', label: 'County' },
   { value: 'congressional_district', label: 'Congressional District' },
-  { value: 'notes', label: 'Notes' },
+  { value: 'notes', label: 'Notes (multiple columns will be combined)' },
   { value: 'discord_username', label: 'Discord Username' },
+  { value: 'date_added', label: 'Date Added / Submission Date' },
   { value: 'mailing_lists', label: 'Mailing Lists → auto-set role flags' },
   { value: 'accepts_marketing', label: 'Accepts Marketing → Email Opt-In' },
+  { value: 'text_opt_in', label: 'Text Consent → Text Opt-In' },
   { value: 'donation_count', label: 'Donation Count → marks as donor' },
   { value: 'donation_amount', label: 'Donation Amount → marks as donor' },
   { value: 'newsletter_subscriber', label: 'Newsletter Subscriber (true/false)' },
@@ -49,7 +52,6 @@ const CRM_FIELDS = [
   { value: 'volunteer_stage', label: 'Volunteer Stage' },
   { value: 'donor_stage', label: 'Donor Stage' },
   { value: 'support_level', label: 'Support Level (1–5)' },
-  { value: 'date_added', label: 'Date Added / Created On' },
 ]
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -102,7 +104,10 @@ function parseCSV(text: string): ParsedRow[] {
 
 function guessFieldMapping(columnName: string): string {
   const col = columnName.toLowerCase().trim()
+  // Squarespace form timestamp column (named after timezone e.g. "America/New_York")
+  if (col.startsWith('america/') || col.startsWith('us/') || col.startsWith('utc')) return 'date_added'
   if (col === 'email') return 'email'
+  if (col === 'name') return 'full_name'
   if (col === 'first name' || col === 'first_name' || col === 'firstname') return 'first_name'
   if (col === 'last name' || col === 'last_name' || col === 'lastname') return 'last_name'
   // Shipping = physical address → map to CRM fields
@@ -110,24 +115,29 @@ function guessFieldMapping(columnName: string): string {
   if (col === 'shipping city') return 'town'
   if (col === 'shipping province/state') return 'state'
   if (col === 'shipping zip') return 'zip'
-  // Billing = payment address → ignore by default
+  // Billing = payment address → ignore
   if (col.startsWith('billing')) return 'ignore'
   if (col === 'shipping name' || col === 'shipping address 1' || col === 'shipping address 2' || col === 'shipping country') return 'ignore'
-  // Generic address fields
+  // Generic address
   if (col === 'phone' || col === 'phone number' || col === 'mobile') return 'phone'
-  if (col === 'city' || col === 'town') return 'town'
+  if (col === 'city' || col === 'town' || col === 'your city/town' || col === 'your town/city' || col === 'your town' || col === 'your city') return 'town'
   if (col === 'state' || col === 'province') return 'state'
   if (col === 'zip' || col === 'zip code' || col === 'postal code') return 'zip'
   if (col === 'county') return 'county'
   if (col === 'congressional district') return 'congressional_district'
+  // Role/opt-in flags
   if (col === 'mailing lists') return 'mailing_lists'
   if (col === 'accepts marketing') return 'accepts_marketing'
+  if (col === 'text/phone' || col.includes('text consent') || col.includes('receive text') || col.includes('sms')) return 'text_opt_in'
   if (col === 'donation count') return 'donation_count'
   if (col === 'total donation amount') return 'donation_amount'
   if (col === 'created on') return 'date_added'
-  if (col === 'notes' || col === 'note') return 'notes'
+  // Notes — volunteer interest fields, messages, free text
+  if (col === 'notes' || col === 'note' || col === 'message' || col === 'tags') return 'notes'
+  if (col === 'interest area(s)' || col === 'interest areas' || col === 'interests') return 'notes'
+  if (col === 'not talking to humans' || col === 'talking to humans') return 'notes'
+  if (col.startsWith('where') && col.includes('collect')) return 'notes'
   if (col.includes('discord')) return 'discord_username'
-  if (col === 'tags') return 'notes'
   return 'ignore'
 }
 
@@ -164,17 +174,31 @@ function applyFieldMap(row: ParsedRow, fieldMap: FieldMap, sourceForm: string): 
     original_source_form: sourceForm,
     updated_at: new Date().toISOString(),
   }
+  const notesParts: string[] = []
 
   for (const [csvCol, crmField] of Object.entries(fieldMap)) {
     const val = row[csvCol] ?? ''
     if (!val || crmField === 'ignore') continue
 
     switch (crmField) {
+      case 'full_name': {
+        const parts = val.trim().split(/\s+/)
+        contact.first_name = parts[0] ?? ''
+        contact.last_name = parts.slice(1).join(' ') || ''
+        break
+      }
+      case 'notes':
+        notesParts.push(`${csvCol}: ${val}`)
+        break
       case 'mailing_lists':
         Object.assign(contact, parseMailingLists(val))
         break
       case 'accepts_marketing':
         if (boolVal(val)) { contact.email_opt_in = true; contact.newsletter_subscriber = true }
+        break
+      case 'text_opt_in':
+        // Field has consent text if opted in, empty if not
+        if (val.length > 3) contact.text_opt_in = true
         break
       case 'donation_count':
         if (parseInt(val) > 0) { contact.is_donor = true; contact.donor_stage = 'Donated'; contact.is_supporter = true }
@@ -199,6 +223,8 @@ function applyFieldMap(row: ParsedRow, fieldMap: FieldMap, sourceForm: string): 
         contact[crmField] = val || null
     }
   }
+
+  if (notesParts.length > 0) contact.notes = notesParts.join('\n')
 
   // Source-form role defaults (for non-Squarespace forms)
   if (sourceForm === 'Volunteer Interest Form') { contact.is_volunteer = true; contact.is_supporter = true; if (!contact.volunteer_stage) contact.volunteer_stage = 'New' }
