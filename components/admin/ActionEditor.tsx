@@ -15,7 +15,7 @@ import Link from 'next/link'
 const PRIORITIES = ['High', 'Medium', 'Low']
 const ACTION_TYPES = ['Call', 'Text', 'Email', 'Discord DM', 'Follow-up', 'Thank-you', 'Invite', 'Check in', 'Pitch', 'Schedule meeting']
 const ACTION_AREAS = ['Volunteers', 'Signature Collection', 'Discord', 'Donations', 'Media', 'Organization Outreach', 'Candidate Partners', 'Events', 'General Supporter Follow-Up']
-const STATUSES = ['Not started', 'In progress', 'Contacted', 'Waiting on response', 'Responded', 'Done', 'Blocked', 'Dropped', 'Skipped']
+const STATUSES = ['Not started', 'In progress', 'Contacted', 'Follow-up', 'Waiting on response', 'Responded', 'Committed', 'Declined', 'Unresponsive', 'Done', 'Blocked', 'Dropped', 'Skipped']
 
 export default function ActionEditor({ action }: { action: any }) {
   const router = useRouter()
