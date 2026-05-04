@@ -13,7 +13,7 @@ import { Badge } from '@/components/ui/badge'
 import Link from 'next/link'
 
 const PRIORITIES = ['High', 'Medium', 'Low']
-const ACTION_TYPES = ['Call', 'Text', 'Email', 'Discord DM', 'Ask', 'Follow-up', 'Thank-you', 'Invite', 'Assign task', 'Check in', 'Pitch', 'Schedule meeting']
+const ACTION_TYPES = ['Call', 'Text', 'Email', 'Discord DM', 'Follow-up', 'Thank-you', 'Invite', 'Check in', 'Pitch', 'Schedule meeting']
 const ACTION_AREAS = ['Volunteers', 'Signature Collection', 'Discord', 'Donations', 'Media', 'Organization Outreach', 'Candidate Partners', 'Events', 'General Supporter Follow-Up']
 const STATUSES = ['Not started', 'In progress', 'Contacted', 'Waiting on response', 'Responded', 'Done', 'Blocked', 'Dropped', 'Skipped']
 
@@ -22,8 +22,6 @@ export default function ActionEditor({ action }: { action: any }) {
   const supabase = createClient()
 
   const [title, setTitle] = useState(action.title ?? '')
-  const [suggestedAsk, setSuggestedAsk] = useState(action.suggested_ask ?? '')
-  const [suggestedMessage, setSuggestedMessage] = useState(action.suggested_message ?? '')
   const [priority, setPriority] = useState(action.priority ?? 'Medium')
   const [actionType, setActionType] = useState(action.action_type ?? 'Email')
   const [actionArea, setActionArea] = useState(action.action_area ?? 'Volunteers')
@@ -40,8 +38,6 @@ export default function ActionEditor({ action }: { action: any }) {
     setSaving(true)
     await supabase.from('actions').update({
       title,
-      suggested_ask: suggestedAsk,
-      suggested_message: suggestedMessage,
       priority,
       action_type: actionType,
       action_area: actionArea,
@@ -56,16 +52,6 @@ export default function ActionEditor({ action }: { action: any }) {
     setTimeout(() => setSaved(false), 2000)
   }
 
-  async function handleAssignToCandidate() {
-    setSaving(true)
-    await supabase.from('actions').update({
-      assigned_to: 'candidate',
-      updated_at: new Date().toISOString(),
-    }).eq('id', action.id)
-    setAssignedTo('candidate')
-    setSaving(false)
-  }
-
   async function handleMarkDone() {
     setSaving(true)
     await supabase.from('actions').update({
@@ -77,50 +63,35 @@ export default function ActionEditor({ action }: { action: any }) {
   }
 
   return (
-    <div className="max-w-3xl space-y-4">
+    <div className="max-w-2xl space-y-4">
       <div className="flex items-center gap-3">
-        <Link href="/actions" className="text-sm text-gray-500 hover:text-gray-900">← Actions</Link>
-        <span className="text-gray-300">/</span>
-        <span className="text-sm text-gray-700 truncate">{title}</span>
+        <Link href="/actions" className="text-gray-500 hover:text-gray-900">← Back to board</Link>
       </div>
 
-      {/* Contact context */}
       {contact && (
         <Card>
           <CardContent className="pt-4 pb-4">
             <div className="flex items-start justify-between gap-4">
               <div>
-                <div className="flex items-center gap-2">
-                  <Link href={`/contacts/${contact.id}`} className="font-semibold text-blue-600 hover:underline">
-                    {contact.full_name}
-                  </Link>
-                  <span className="text-xs text-gray-400">{contact.display_id}</span>
-                </div>
-                <div className="text-sm text-gray-600 mt-1 space-y-0.5">
+                <Link href={`/contacts/${contact.id}`} className="font-semibold text-blue-600 hover:underline text-lg">
+                  {contact.full_name}
+                </Link>
+                <div className="text-gray-600 mt-1 space-y-0.5">
                   {contact.email && <div>{contact.email}</div>}
                   {contact.phone && <div>{contact.phone}</div>}
                   {contact.town && <div>{contact.town}{contact.state ? `, ${contact.state}` : ''}</div>}
                 </div>
               </div>
               <div className="text-right shrink-0 space-y-1">
-                {contact.date_added && (
-                  <div className="text-xs text-gray-500">Signed up {contact.date_added}</div>
-                )}
-                {contact.volunteer_stage && (
-                  <Badge variant="secondary" className="text-xs">Vol: {contact.volunteer_stage}</Badge>
-                )}
-                {contact.donor_stage && (
-                  <Badge variant="secondary" className="text-xs">Donor: {contact.donor_stage}</Badge>
-                )}
+                {contact.date_added && <div className="text-gray-500">Signed up {contact.date_added}</div>}
+                <div className="flex gap-1 justify-end flex-wrap">
+                  {contact.volunteer_stage && <Badge variant="secondary">Vol: {contact.volunteer_stage}</Badge>}
+                  {contact.donor_stage && <Badge variant="secondary">Donor: {contact.donor_stage}</Badge>}
+                </div>
               </div>
             </div>
-            {contact.last_contact_summary && (
-              <div className="mt-3 pt-3 border-t text-xs text-gray-500">
-                <span className="font-medium">Last contact:</span> {contact.last_contact_summary}
-              </div>
-            )}
             {contact.notes && (
-              <div className="mt-2 text-xs text-gray-500">
+              <div className="mt-3 pt-3 border-t text-gray-500">
                 <span className="font-medium">Notes:</span> {contact.notes}
               </div>
             )}
@@ -128,114 +99,85 @@ export default function ActionEditor({ action }: { action: any }) {
         </Card>
       )}
 
-      {/* Action editor */}
       <Card>
         <CardHeader className="pb-3">
           <div className="flex items-center justify-between">
-            <CardTitle className="text-base">Edit Action</CardTitle>
+            <CardTitle>Edit Action</CardTitle>
             <div className="flex gap-2">
-              {assignedTo !== 'candidate' && (
-                <Button size="sm" onClick={handleAssignToCandidate} disabled={saving}>
-                  Send to Jon's queue →
-                </Button>
-              )}
-              {assignedTo === 'candidate' && (
-                <Badge variant="default" className="text-xs px-3 py-1">In Jon's queue</Badge>
-              )}
               <Button size="sm" variant="outline" onClick={handleMarkDone} disabled={saving}>
-                Mark done
+                Mark done ✓
               </Button>
             </div>
           </div>
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="space-y-1">
-            <Label className="text-xs">Title</Label>
+            <Label>Title</Label>
             <Input value={title} onChange={e => setTitle(e.target.value)} />
-          </div>
-
-          <div className="space-y-1">
-            <Label className="text-xs">Suggested ask</Label>
-            <Textarea
-              value={suggestedAsk}
-              onChange={e => setSuggestedAsk(e.target.value)}
-              className="resize-none h-20 text-sm"
-              placeholder="What should Jon ask this person to do?"
-            />
-          </div>
-
-          <div className="space-y-1">
-            <Label className="text-xs">Suggested message <span className="text-gray-400">(what Jon should actually say)</span></Label>
-            <Textarea
-              value={suggestedMessage}
-              onChange={e => setSuggestedMessage(e.target.value)}
-              className="resize-none h-28 text-sm"
-              placeholder={`Hi ${contact?.full_name?.split(' ')[0] ?? 'there'},\n\n...`}
-            />
           </div>
 
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1">
-              <Label className="text-xs">Priority</Label>
+              <Label>Priority</Label>
               <Select value={priority} onValueChange={v => setPriority(v ?? priority)}>
-                <SelectTrigger className="h-8 text-sm"><SelectValue /></SelectTrigger>
+                <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>{PRIORITIES.map(p => <SelectItem key={p} value={p}>{p}</SelectItem>)}</SelectContent>
               </Select>
             </div>
             <div className="space-y-1">
-              <Label className="text-xs">Type</Label>
+              <Label>Type</Label>
               <Select value={actionType} onValueChange={v => setActionType(v ?? actionType)}>
-                <SelectTrigger className="h-8 text-sm"><SelectValue /></SelectTrigger>
+                <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>{ACTION_TYPES.map(t => <SelectItem key={t} value={t}>{t}</SelectItem>)}</SelectContent>
               </Select>
             </div>
             <div className="space-y-1">
-              <Label className="text-xs">Area</Label>
+              <Label>Area</Label>
               <Select value={actionArea} onValueChange={v => setActionArea(v ?? actionArea)}>
-                <SelectTrigger className="h-8 text-sm"><SelectValue /></SelectTrigger>
+                <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>{ACTION_AREAS.map(a => <SelectItem key={a} value={a}>{a}</SelectItem>)}</SelectContent>
               </Select>
             </div>
             <div className="space-y-1">
-              <Label className="text-xs">Status</Label>
+              <Label>Status</Label>
               <Select value={status} onValueChange={v => setStatus(v ?? status)}>
-                <SelectTrigger className="h-8 text-sm"><SelectValue /></SelectTrigger>
+                <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>{STATUSES.map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}</SelectContent>
               </Select>
             </div>
             <div className="space-y-1">
-              <Label className="text-xs">Due date</Label>
-              <Input type="date" value={dueDate} onChange={e => setDueDate(e.target.value)} className="h-8 text-sm" />
+              <Label>Due date</Label>
+              <Input type="date" value={dueDate} onChange={e => setDueDate(e.target.value)} />
             </div>
             <div className="space-y-1">
-              <Label className="text-xs">Assigned to</Label>
+              <Label>Assigned to</Label>
               <Select value={assignedTo} onValueChange={v => setAssignedTo(v ?? assignedTo)}>
-                <SelectTrigger className="h-8 text-sm"><SelectValue /></SelectTrigger>
+                <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="admin">Admin</SelectItem>
-                  <SelectItem value="candidate">Candidate (Jon)</SelectItem>
+                  <SelectItem value="candidate">Jon (candidate)</SelectItem>
                 </SelectContent>
               </Select>
             </div>
           </div>
 
           <div className="space-y-1">
-            <Label className="text-xs">Admin notes</Label>
+            <Label>Notes</Label>
             <Textarea
               value={notes}
               onChange={e => setNotes(e.target.value)}
-              className="resize-none h-16 text-sm"
-              placeholder="Internal notes — not shown to Jon"
+              className="resize-none h-24"
+              placeholder="Any context or notes about this action..."
             />
           </div>
 
-          <div className="flex items-center gap-3 pt-1">
+          <div className="flex items-center gap-3">
             <Button onClick={handleSave} disabled={saving}>
               {saving ? 'Saving…' : 'Save'}
             </Button>
-            {saved && <span className="text-sm text-green-600">Saved</span>}
-            <Link href="/actions" className="text-sm text-gray-500 hover:text-gray-900 ml-auto">
-              Back to actions
+            {saved && <span className="text-green-600">Saved</span>}
+            <Link href="/actions" className="text-gray-500 hover:text-gray-900 ml-auto">
+              Cancel
             </Link>
           </div>
         </CardContent>
