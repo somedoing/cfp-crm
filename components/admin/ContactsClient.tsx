@@ -22,6 +22,42 @@ type Contact = {
   do_not_contact: boolean
 }
 
+type SortCol = 'date_added' | 'full_name' | 'town'
+type SortDir = 'asc' | 'desc'
+
+function priorityScore(p: string | null) {
+  if (p === 'High') return 0
+  if (p === 'Medium') return 1
+  return 2
+}
+
+function actionParamsForContact(contact: Contact) {
+  const today = new Date()
+  let priority = 'Low'
+  let dueDays = 7
+
+  if (contact.date_added) {
+    const added = new Date(contact.date_added)
+    const daysSince = Math.floor((today.getTime() - added.getTime()) / 86400000)
+    if (daysSince <= 7) { priority = 'High'; dueDays = 1 }
+    else if (added.getFullYear() >= 2026) { priority = 'Medium'; dueDays = 3 }
+  }
+
+  const dueDate = new Date(today)
+  dueDate.setDate(dueDate.getDate() + dueDays)
+
+  return {
+    contact_id: contact.id,
+    title: `Follow up with ${contact.full_name}`,
+    priority,
+    action_type: 'Follow-up',
+    action_area: 'General Supporter Follow-Up',
+    assigned_to: 'admin',
+    status: 'Not started',
+    due_date: dueDate.toISOString().split('T')[0],
+  }
+}
+
 export default function ContactsClient({
   contacts,
   openContactIds,
@@ -30,11 +66,15 @@ export default function ContactsClient({
   openContactIds: string[]
 }) {
   const supabase = createClient()
+
   const [search, setSearch] = useState('')
   const [typeFilter, setTypeFilter] = useState<'all' | 'volunteer' | 'donor' | 'sig'>('all')
   const [outreachFilter, setOutreachFilter] = useState<'needs' | 'all'>('needs')
+  const [sortCol, setSortCol] = useState<SortCol>('date_added')
+  const [sortDir, setSortDir] = useState<SortDir>('desc')
+  const [selected, setSelected] = useState<Set<string>>(new Set())
   const [addedIds, setAddedIds] = useState<Set<string>>(new Set())
-  const [adding, setAdding] = useState<string | null>(null)
+  const [batchAdding, setBatchAdding] = useState(false)
 
   const openIds = useMemo(
     () => new Set([...openContactIds, ...addedIds]),
@@ -50,7 +90,6 @@ export default function ContactsClient({
     let result = contacts.filter(c => !c.do_not_contact)
 
     if (outreachFilter === 'needs') result = result.filter(c => !openIds.has(c.id))
-
     if (typeFilter === 'volunteer') result = result.filter(c => c.is_volunteer)
     if (typeFilter === 'donor') result = result.filter(c => c.is_donor)
     if (typeFilter === 'sig') result = result.filter(c => c.is_signature_collector)
@@ -65,44 +104,99 @@ export default function ContactsClient({
       )
     }
 
-    return result
-  }, [contacts, search, typeFilter, outreachFilter, openIds])
-
-  async function addToPipeline(contact: Contact) {
-    setAdding(contact.id)
-
-    const today = new Date()
-    let priority = 'Low'
-    let dueDays = 7
-
-    if (contact.date_added) {
-      const added = new Date(contact.date_added)
-      const daysSince = Math.floor((today.getTime() - added.getTime()) / 86400000)
-      if (daysSince <= 7) {
-        priority = 'High'
-        dueDays = 1
-      } else if (added.getFullYear() >= 2026) {
-        priority = 'Medium'
-        dueDays = 3
+    result = [...result].sort((a, b) => {
+      let cmp = 0
+      if (sortCol === 'date_added') {
+        const da = a.date_added ?? ''
+        const db = b.date_added ?? ''
+        cmp = da < db ? -1 : da > db ? 1 : 0
+        // secondary: priority
+        if (cmp === 0) cmp = priorityScore(a.priority) - priorityScore(b.priority)
+      } else if (sortCol === 'full_name') {
+        cmp = (a.full_name ?? '').localeCompare(b.full_name ?? '')
+      } else if (sortCol === 'town') {
+        cmp = (a.town ?? '').localeCompare(b.town ?? '')
       }
-    }
-
-    const dueDate = new Date(today)
-    dueDate.setDate(dueDate.getDate() + dueDays)
-
-    await supabase.from('actions').insert({
-      contact_id: contact.id,
-      title: `Follow up with ${contact.full_name}`,
-      priority,
-      action_type: 'Follow-up',
-      action_area: 'General Supporter Follow-Up',
-      assigned_to: 'admin',
-      status: 'Not started',
-      due_date: dueDate.toISOString().split('T')[0],
+      return sortDir === 'asc' ? cmp : -cmp
     })
 
+    return result
+  }, [contacts, search, typeFilter, outreachFilter, openIds, sortCol, sortDir])
+
+  const visible = filtered.slice(0, 200)
+  const visibleIds = useMemo(() => new Set(visible.map(c => c.id)), [visible])
+
+  const selectedVisible = useMemo(
+    () => [...selected].filter(id => visibleIds.has(id)),
+    [selected, visibleIds]
+  )
+  const allVisibleSelected =
+    visible.length > 0 && visible.every(c => selected.has(c.id))
+  const someVisibleSelected = selectedVisible.length > 0 && !allVisibleSelected
+
+  function toggleSort(col: SortCol) {
+    if (sortCol === col) {
+      setSortDir(d => (d === 'asc' ? 'desc' : 'asc'))
+    } else {
+      setSortCol(col)
+      setSortDir(col === 'date_added' ? 'desc' : 'asc')
+    }
+  }
+
+  function toggleRow(id: string) {
+    setSelected(prev => {
+      const next = new Set(prev)
+      next.has(id) ? next.delete(id) : next.add(id)
+      return next
+    })
+  }
+
+  function toggleSelectAll() {
+    if (allVisibleSelected) {
+      setSelected(prev => {
+        const next = new Set(prev)
+        visible.forEach(c => next.delete(c.id))
+        return next
+      })
+    } else {
+      setSelected(prev => {
+        const next = new Set(prev)
+        visible.forEach(c => next.add(c.id))
+        return next
+      })
+    }
+  }
+
+  async function addSelected() {
+    const toAdd = visible.filter(c => selected.has(c.id) && !openIds.has(c.id))
+    if (toAdd.length === 0) return
+
+    setBatchAdding(true)
+    const rows = toAdd.map(actionParamsForContact)
+    await supabase.from('actions').insert(rows)
+    const newIds = new Set(toAdd.map(c => c.id))
+    setAddedIds(prev => new Set([...prev, ...newIds]))
+    setSelected(prev => {
+      const next = new Set(prev)
+      newIds.forEach(id => next.delete(id))
+      return next
+    })
+    setBatchAdding(false)
+  }
+
+  async function addSingle(contact: Contact) {
+    setSelected(prev => {
+      const next = new Set(prev)
+      next.add(contact.id)
+      return next
+    })
+    await supabase.from('actions').insert(actionParamsForContact(contact))
     setAddedIds(prev => new Set([...prev, contact.id]))
-    setAdding(null)
+    setSelected(prev => {
+      const next = new Set(prev)
+      next.delete(contact.id)
+      return next
+    })
   }
 
   const typeOptions = [
@@ -112,7 +206,10 @@ export default function ContactsClient({
     { key: 'sig', label: 'Signature' },
   ] as const
 
-  const visible = filtered.slice(0, 150)
+  function SortArrow({ col }: { col: SortCol }) {
+    if (sortCol !== col) return <span className="text-gray-300 ml-1">↕</span>
+    return <span className="ml-1">{sortDir === 'asc' ? '↑' : '↓'}</span>
+  }
 
   return (
     <div className="space-y-4">
@@ -128,6 +225,7 @@ export default function ContactsClient({
         <span className="text-gray-500">{filtered.length.toLocaleString()} shown</span>
       </div>
 
+      {/* Filters */}
       <div className="flex flex-wrap gap-3 items-center">
         <input
           type="text"
@@ -175,32 +273,93 @@ export default function ContactsClient({
             All
           </button>
         </div>
+
+        {/* Batch action bar */}
+        {selectedVisible.length > 0 && (
+          <div className="flex items-center gap-2 ml-auto bg-blue-50 border border-blue-200 rounded-lg px-3 py-2">
+            <span className="text-blue-700 font-medium">
+              {selectedVisible.length} selected
+            </span>
+            <button
+              onClick={addSelected}
+              disabled={batchAdding}
+              className="bg-blue-600 text-white rounded px-3 py-1 hover:bg-blue-700 transition-colors disabled:opacity-50 font-medium"
+            >
+              {batchAdding ? 'Adding…' : `Add ${selectedVisible.length} to pipeline`}
+            </button>
+            <button
+              onClick={() => setSelected(new Set())}
+              className="text-blue-400 hover:text-blue-600"
+            >
+              Clear
+            </button>
+          </div>
+        )}
       </div>
 
       <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
         <table className="w-full">
           <thead className="bg-gray-50 border-b border-gray-200">
             <tr>
-              <th className="text-left px-4 py-3 font-medium text-gray-500">Name</th>
+              <th className="px-4 py-3 w-10">
+                <input
+                  type="checkbox"
+                  checked={allVisibleSelected}
+                  ref={el => { if (el) el.indeterminate = someVisibleSelected }}
+                  onChange={toggleSelectAll}
+                  className="rounded"
+                />
+              </th>
+              <th
+                className="text-left px-4 py-3 font-medium text-gray-500 cursor-pointer hover:text-gray-800 select-none"
+                onClick={() => toggleSort('full_name')}
+              >
+                Name <SortArrow col="full_name" />
+              </th>
               <th className="text-left px-4 py-3 font-medium text-gray-500">Email</th>
-              <th className="text-left px-4 py-3 font-medium text-gray-500">Town</th>
+              <th
+                className="text-left px-4 py-3 font-medium text-gray-500 cursor-pointer hover:text-gray-800 select-none"
+                onClick={() => toggleSort('town')}
+              >
+                Town <SortArrow col="town" />
+              </th>
               <th className="text-left px-4 py-3 font-medium text-gray-500">Type</th>
-              <th className="text-left px-4 py-3 font-medium text-gray-500">Added</th>
+              <th
+                className="text-left px-4 py-3 font-medium text-gray-500 cursor-pointer hover:text-gray-800 select-none"
+                onClick={() => toggleSort('date_added')}
+              >
+                Added <SortArrow col="date_added" />
+              </th>
               <th className="px-4 py-3"></th>
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-100">
             {visible.map(contact => {
               const inPipeline = openIds.has(contact.id)
-              const justAdded = addedIds.has(contact.id)
+              const isSelected = selected.has(contact.id)
               const location = [contact.town, contact.state].filter(Boolean).join(', ')
 
               return (
-                <tr key={contact.id} className={`hover:bg-gray-50 ${justAdded ? 'opacity-40' : ''}`}>
+                <tr
+                  key={contact.id}
+                  className={`hover:bg-gray-50 cursor-pointer ${isSelected ? 'bg-blue-50' : ''} ${inPipeline && outreachFilter === 'all' ? 'opacity-40' : ''}`}
+                  onClick={() => !inPipeline && toggleRow(contact.id)}
+                >
+                  <td className="px-4 py-3" onClick={e => e.stopPropagation()}>
+                    {!inPipeline && (
+                      <input
+                        type="checkbox"
+                        checked={isSelected}
+                        onChange={() => toggleRow(contact.id)}
+                        className="rounded"
+                      />
+                    )}
+                  </td>
                   <td className="px-4 py-3">
                     <Link
                       href={`/contacts/${contact.id}`}
                       className="font-medium text-blue-600 hover:underline"
+                      onClick={e => e.stopPropagation()}
                     >
                       {contact.full_name}
                     </Link>
@@ -218,16 +377,15 @@ export default function ContactsClient({
                     </div>
                   </td>
                   <td className="px-4 py-3 text-gray-500">{contact.date_added ?? '—'}</td>
-                  <td className="px-4 py-3 text-right">
+                  <td className="px-4 py-3 text-right" onClick={e => e.stopPropagation()}>
                     {inPipeline ? (
                       <span className="text-gray-400">In pipeline</span>
                     ) : (
                       <button
-                        onClick={() => addToPipeline(contact)}
-                        disabled={adding === contact.id}
-                        className="bg-blue-600 text-white rounded px-3 py-1 hover:bg-blue-700 transition-colors disabled:opacity-50"
+                        onClick={() => addSingle(contact)}
+                        className="text-gray-400 hover:text-blue-600 border border-gray-200 hover:border-blue-300 rounded px-2 py-1 transition-colors"
                       >
-                        {adding === contact.id ? '…' : '+ Add'}
+                        + Add
                       </button>
                     )}
                   </td>
@@ -240,9 +398,9 @@ export default function ContactsClient({
         {filtered.length === 0 && (
           <div className="text-center py-12 text-gray-500">No contacts match these filters.</div>
         )}
-        {filtered.length > 150 && (
+        {filtered.length > 200 && (
           <div className="text-center py-4 text-gray-400 border-t">
-            Showing 150 of {filtered.length.toLocaleString()} — use search or filters to narrow down
+            Showing 200 of {filtered.length.toLocaleString()} — use search or filters to narrow down
           </div>
         )}
       </div>
