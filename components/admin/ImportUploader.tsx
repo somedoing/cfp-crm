@@ -10,6 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Badge } from '@/components/ui/badge'
 
 const SOURCE_FORMS = [
+  'Squarespace Contacts Export',
   'Volunteer Interest Form',
   'Signature Collector Signup',
   'Newsletter Signup',
@@ -22,20 +23,180 @@ const SOURCE_FORMS = [
 
 type ParsedRow = Record<string, string>
 type DupeMatch = { contact_id: string; full_name: string; email: string; confidence: string }
-type ReviewRow = { data: ParsedRow; _action: 'create' | 'merge' | 'skip'; _match?: DupeMatch }
+type ReviewRow = { data: ParsedRow; _action: 'create' | 'merge' | 'skip'; _match?: DupeMatch; roles: string[] }
 
+// Proper CSV parser that handles quoted fields containing commas and newlines
 function parseCSV(text: string): ParsedRow[] {
-  const lines = text.trim().split('\n')
-  if (lines.length < 2) return []
-  const headers = lines[0].split(',').map(h => h.trim().replace(/^"|"$/g, ''))
-  return lines.slice(1).map(line => {
-    const values = line.split(',').map(v => v.trim().replace(/^"|"$/g, ''))
-    return Object.fromEntries(headers.map((h, i) => [h, values[i] ?? '']))
-  })
+  const rows: string[][] = []
+  let current: string[] = []
+  let field = ''
+  let inQuotes = false
+
+  for (let i = 0; i < text.length; i++) {
+    const ch = text[i]
+    const next = text[i + 1]
+
+    if (inQuotes) {
+      if (ch === '"' && next === '"') {
+        field += '"'
+        i++
+      } else if (ch === '"') {
+        inQuotes = false
+      } else {
+        field += ch
+      }
+    } else {
+      if (ch === '"') {
+        inQuotes = true
+      } else if (ch === ',') {
+        current.push(field.trim())
+        field = ''
+      } else if (ch === '\n' || (ch === '\r' && next === '\n')) {
+        if (ch === '\r') i++
+        current.push(field.trim())
+        if (current.some(f => f !== '')) rows.push(current)
+        current = []
+        field = ''
+      } else {
+        field += ch
+      }
+    }
+  }
+  if (field || current.length) {
+    current.push(field.trim())
+    if (current.some(f => f !== '')) rows.push(current)
+  }
+
+  if (rows.length < 2) return []
+  const headers = rows[0]
+  return rows.slice(1).map(values =>
+    Object.fromEntries(headers.map((h, i) => [h, values[i] ?? '']))
+  )
 }
 
 function normalizeEmail(email: string) {
   return email?.toLowerCase().trim() ?? ''
+}
+
+// Parse Squarespace Mailing Lists field into role flags
+function parseMailingLists(mailingLists: string): Record<string, unknown> {
+  const lists = mailingLists.split(',').map(l => l.trim().toLowerCase())
+  const flags: Record<string, unknown> = {}
+
+  if (lists.some(l => l.includes('volunteer'))) {
+    flags.is_volunteer = true
+    flags.is_supporter = true
+    flags.volunteer_stage = 'New'
+  }
+  if (lists.some(l => l.includes('newsletter') || l.includes('campaign newsletter'))) {
+    flags.newsletter_subscriber = true
+    flags.email_opt_in = true
+    flags.is_supporter = true
+  }
+  if (lists.some(l => l.includes('media'))) {
+    flags.is_media_contact = true
+  }
+  if (lists.some(l => l.includes('donor'))) {
+    flags.is_donor = true
+  }
+  if (lists.some(l => l.includes('signature') || l.includes('petition'))) {
+    flags.is_signature_collector = true
+    flags.signature_stage = 'New lead'
+  }
+  if (lists.some(l => l.includes('coalition'))) {
+    flags.is_coalition_contact = true
+  }
+  if (lists.some(l => l.includes('partner'))) {
+    flags.is_candidate_partner = true
+  }
+  if (lists.some(l => l.includes('discord'))) {
+    flags.in_discord = true
+  }
+  if (lists.some(l => l.includes('supporter'))) {
+    flags.is_supporter = true
+  }
+
+  return flags
+}
+
+function getRoleLabels(mailingLists: string): string[] {
+  if (!mailingLists) return []
+  return mailingLists.split(',').map(l => l.trim()).filter(Boolean)
+}
+
+// Map a Squarespace contacts export row to CRM contact fields
+function mapSquarespaceRow(row: ParsedRow): Record<string, unknown> {
+  const mailingFlags = parseMailingLists(row['Mailing Lists'] ?? '')
+  const donationCount = parseInt(row['Donation Count'] ?? '0') || 0
+  const donationAmount = parseFloat(row['Total Donation Amount'] ?? '0') || 0
+  const acceptsMarketing = row['Accepts Marketing']?.toUpperCase() === 'TRUE'
+
+  const mapped: Record<string, unknown> = {
+    first_name: row['First Name'] ?? '',
+    last_name: row['Last Name'] ?? '',
+    email: normalizeEmail(row['Email'] ?? '') || null,
+    phone: row['Shipping Phone Number'] || row['Billing Phone Number'] || null,
+    town: row['Shipping City'] || row['Billing City'] || null,
+    state: row['Shipping Province/State'] || row['Billing Province/State'] || null,
+    zip: row['Shipping Zip'] || row['Billing Zip'] || null,
+    email_opt_in: acceptsMarketing,
+    source: 'Squarespace',
+    original_source_form: 'Squarespace Contacts Export',
+    updated_at: new Date().toISOString(),
+    ...mailingFlags,
+  }
+
+  if (donationCount > 0 || donationAmount > 0) {
+    mapped.is_donor = true
+    mapped.donor_stage = 'Donated'
+    mapped.is_supporter = true
+  }
+
+  if (acceptsMarketing) {
+    mapped.newsletter_subscriber = true
+  }
+
+  return mapped
+}
+
+// Map a standard form row to CRM contact fields
+function mapFormRow(row: ParsedRow, sourceForm: string): Record<string, unknown> {
+  const mapped: Record<string, unknown> = {
+    first_name: row['First Name'] || row['first_name'] || row['First'] || '',
+    last_name: row['Last Name'] || row['last_name'] || row['Last'] || '',
+    email: normalizeEmail(row['Email'] || row['email'] || '') || null,
+    phone: row['Phone'] || row['phone'] || row['Phone Number'] || null,
+    town: row['City'] || row['Town'] || row['city'] || row['town'] || null,
+    state: row['State'] || row['Province'] || null,
+    zip: row['Zip'] || row['ZIP'] || row['Postal Code'] || null,
+    source: sourceForm,
+    original_source_form: sourceForm,
+    updated_at: new Date().toISOString(),
+  }
+
+  if (sourceForm === 'Volunteer Interest Form') {
+    mapped.is_volunteer = true
+    mapped.is_supporter = true
+    mapped.volunteer_stage = 'New'
+  } else if (sourceForm === 'Signature Collector Signup') {
+    mapped.is_volunteer = true
+    mapped.is_signature_collector = true
+    mapped.is_supporter = true
+    mapped.signature_stage = 'New lead'
+  } else if (sourceForm === 'Newsletter Signup') {
+    mapped.newsletter_subscriber = true
+    mapped.email_opt_in = true
+    mapped.is_supporter = true
+  } else if (sourceForm === 'Donation Form') {
+    mapped.is_donor = true
+    mapped.donor_stage = 'Donated'
+  } else if (sourceForm === 'Pledge Form') {
+    mapped.is_supporter = true
+    mapped.is_volunteer = true
+    mapped.volunteer_stage = 'New'
+  }
+
+  return mapped
 }
 
 export default function ImportUploader() {
@@ -49,6 +210,7 @@ export default function ImportUploader() {
   const [step, setStep] = useState<'upload' | 'review' | 'done'>('upload')
   const [loading, setLoading] = useState(false)
   const [filename, setFilename] = useState('')
+  const [processedCount, setProcessedCount] = useState(0)
 
   async function handleFile(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]
@@ -57,6 +219,11 @@ export default function ImportUploader() {
     const text = await file.text()
     const parsed = parseCSV(text)
     setRows(parsed)
+
+    // Auto-detect Squarespace contacts export
+    if (parsed[0] && 'Mailing Lists' in parsed[0]) {
+      setSourceForm('Squarespace Contacts Export')
+    }
   }
 
   async function handlePreview() {
@@ -75,10 +242,11 @@ export default function ImportUploader() {
     const reviewed: ReviewRow[] = rows.map(row => {
       const email = normalizeEmail(row['Email'] || row['email'] || '')
       const match = emailMap.get(email)
+      const roles = getRoleLabels(row['Mailing Lists'] ?? '')
       if (match) {
-        return { data: row, _action: 'merge', _match: { contact_id: match.id, full_name: match.full_name, email: match.email, confidence: 'exact' } }
+        return { data: row, _action: 'merge', _match: { contact_id: match.id, full_name: match.full_name, email: match.email, confidence: 'exact' }, roles }
       }
-      return { data: row, _action: 'create' }
+      return { data: row, _action: 'create', roles }
     })
 
     setReviewRows(reviewed)
@@ -92,6 +260,7 @@ export default function ImportUploader() {
 
   async function handleProcess() {
     setLoading(true)
+    let processed = 0
 
     const { data: importRecord } = await supabase
       .from('imports')
@@ -101,50 +270,14 @@ export default function ImportUploader() {
 
     if (!importRecord) { setLoading(false); return }
 
-    let processed = 0
-
     for (const row of reviewRows) {
       if (row._action === 'skip') continue
 
-      const firstName = row.data['First Name'] || row.data['first_name'] || row.data['First'] || ''
-      const lastName = row.data['Last Name'] || row.data['last_name'] || row.data['Last'] || ''
-      const email = normalizeEmail(row.data['Email'] || row.data['email'] || '')
-      const phone = row.data['Phone'] || row.data['phone'] || ''
-      const town = row.data['City'] || row.data['Town'] || row.data['city'] || row.data['town'] || ''
+      const contactData = sourceForm === 'Squarespace Contacts Export'
+        ? mapSquarespaceRow(row.data)
+        : mapFormRow(row.data, sourceForm)
 
-      const contactData: Record<string, unknown> = {
-        first_name: firstName,
-        last_name: lastName,
-        email: email || null,
-        phone: phone || null,
-        town: town || null,
-        source: sourceForm,
-        original_source_form: sourceForm,
-        updated_at: new Date().toISOString(),
-      }
-
-      // Apply role flags based on source form
-      if (sourceForm === 'Volunteer Interest Form') {
-        contactData.is_volunteer = true
-        contactData.is_supporter = true
-        contactData.volunteer_stage = 'New'
-      } else if (sourceForm === 'Signature Collector Signup') {
-        contactData.is_volunteer = true
-        contactData.is_signature_collector = true
-        contactData.is_supporter = true
-        contactData.signature_stage = 'New lead'
-      } else if (sourceForm === 'Newsletter Signup') {
-        contactData.newsletter_subscriber = true
-        contactData.email_opt_in = true
-        contactData.is_supporter = true
-      } else if (sourceForm === 'Donation Form') {
-        contactData.is_donor = true
-        contactData.donor_stage = 'Donated'
-      } else if (sourceForm === 'Pledge Form') {
-        contactData.is_supporter = true
-        contactData.is_volunteer = true
-        contactData.volunteer_stage = 'New'
-      }
+      const firstName = row.data['First Name'] || row.data['first_name'] || ''
 
       let contactId: string
 
@@ -161,31 +294,38 @@ export default function ImportUploader() {
         contactId = newContact.id
       }
 
-      // Generate suggested action
-      let actionTitle = ''
-      let suggestedAsk = ''
+      // Generate actions based on roles
+      const actions: { title: string; area: string; ask: string }[] = []
 
-      if (sourceForm === 'Volunteer Interest Form') {
-        actionTitle = `Welcome ${firstName} and ask how they can help`
-        suggestedAsk = 'Ask what kind of volunteering they\'re interested in and invite them to join Discord.'
-      } else if (sourceForm === 'Signature Collector Signup') {
-        actionTitle = `Follow up with ${firstName} about collecting signatures`
-        suggestedAsk = 'Ask if they can collect 10 signatures this week and join Discord.'
-      } else if (sourceForm === 'Donation Form') {
-        actionTitle = `Send thank-you to ${firstName}`
-        suggestedAsk = 'Thank them for their donation. If not yet a volunteer, ask if they want to help beyond donating.'
-      } else if (sourceForm === 'Pledge Form') {
-        actionTitle = `Follow up with ${firstName} on their pledge`
-        suggestedAsk = 'Check in on their interest in volunteering and next steps.'
+      if (contactData.is_volunteer && !row._match) {
+        actions.push({
+          title: `Welcome ${firstName} and ask how they can help`,
+          area: 'Volunteers',
+          ask: "Ask what kind of volunteering they're interested in and invite them to join Discord.",
+        })
+      }
+      if (contactData.is_signature_collector && !row._match) {
+        actions.push({
+          title: `Follow up with ${firstName} about collecting signatures`,
+          area: 'Signature Collection',
+          ask: 'Ask if they can collect 10 signatures this week and join Discord.',
+        })
+      }
+      if (contactData.is_donor && !row._match) {
+        actions.push({
+          title: `Send thank-you to ${firstName}`,
+          area: 'Donations',
+          ask: 'Thank them for their donation. Ask if they want to help beyond donating.',
+        })
       }
 
-      if (actionTitle) {
+      for (const action of actions) {
         await supabase.from('actions').insert({
           contact_id: contactId,
-          action_area: sourceForm.includes('Signature') ? 'Signature Collection' : sourceForm.includes('Donation') ? 'Donations' : 'Volunteers',
+          action_area: action.area,
           action_type: 'Email',
-          title: actionTitle,
-          suggested_ask: suggestedAsk,
+          title: action.title,
+          suggested_ask: action.ask,
           assigned_to: 'admin',
           priority: 'Medium',
           status: 'Not started',
@@ -198,20 +338,31 @@ export default function ImportUploader() {
 
     await supabase.from('imports').update({ status: 'processed', processed_count: processed }).eq('id', importRecord.id)
 
+    setProcessedCount(processed)
     setStep('done')
     setLoading(false)
     router.refresh()
+  }
+
+  function reset() {
+    setStep('upload')
+    setRows([])
+    setReviewRows([])
+    setFilename('')
+    setSourceForm('')
+    setProcessedCount(0)
   }
 
   if (step === 'done') {
     return (
       <Card>
         <CardContent className="pt-6 text-center space-y-3">
-          <p className="text-green-600 font-medium">Import complete.</p>
-          <p className="text-sm text-gray-500">Contacts updated and actions created.</p>
-          <Button variant="outline" onClick={() => { setStep('upload'); setRows([]); setReviewRows([]); setFilename(''); setSourceForm('') }}>
-            Import another file
-          </Button>
+          <p className="text-green-600 font-medium">Import complete — {processedCount} contacts processed.</p>
+          <p className="text-sm text-gray-500">Actions created for new volunteers, signature collectors, and donors.</p>
+          <div className="flex gap-2 justify-center">
+            <Button variant="outline" onClick={reset}>Import another file</Button>
+            <Button onClick={() => router.push('/actions')}>View actions</Button>
+          </div>
         </CardContent>
       </Card>
     )
@@ -229,10 +380,10 @@ export default function ImportUploader() {
           <p className="text-sm text-gray-500">{sourceForm}</p>
         </CardHeader>
         <CardContent className="space-y-4">
-          <div className="flex gap-3 text-sm">
-            <span className="text-green-600 font-medium">{creates} new</span>
-            <span className="text-blue-600 font-medium">{merges} merge</span>
-            <span className="text-gray-400">{skips} skip</span>
+          <div className="flex gap-4 text-sm">
+            <span className="text-green-600 font-medium">{creates} new contacts</span>
+            <span className="text-blue-600 font-medium">{merges} merge with existing</span>
+            {skips > 0 && <span className="text-gray-400">{skips} skipped</span>}
           </div>
 
           <div className="max-h-96 overflow-y-auto border rounded divide-y text-sm">
@@ -240,30 +391,39 @@ export default function ImportUploader() {
               const name = [row.data['First Name'] || row.data['first_name'], row.data['Last Name'] || row.data['last_name']].filter(Boolean).join(' ')
               const email = row.data['Email'] || row.data['email'] || ''
               return (
-                <div key={idx} className="flex items-center justify-between px-3 py-2 gap-3">
-                  <div className="min-w-0">
-                    <span className="font-medium">{name || '(no name)'}</span>
-                    <span className="text-gray-400 ml-2 text-xs">{email}</span>
-                    {row._match && (
-                      <span className="ml-2 text-xs text-blue-600">
-                        → matches {row._match.full_name} ({row._match.confidence})
-                      </span>
-                    )}
+                <div key={idx} className="px-3 py-2 space-y-1">
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="min-w-0">
+                      <span className="font-medium">{name || '(no name)'}</span>
+                      <span className="text-gray-400 ml-2 text-xs">{email}</span>
+                      {row._match && (
+                        <span className="ml-2 text-xs text-blue-600">
+                          → matches {row._match.full_name}
+                        </span>
+                      )}
+                    </div>
+                    <div className="flex gap-1 shrink-0">
+                      {(['create', 'merge', 'skip'] as const).map(a => (
+                        (!row._match && a === 'merge') ? null :
+                        (row._match && a === 'create') ? null : (
+                          <button
+                            key={a}
+                            onClick={() => setRowAction(idx, a)}
+                            className={`text-xs px-2 py-0.5 rounded border ${row._action === a ? 'bg-gray-900 text-white border-gray-900' : 'text-gray-600 border-gray-200 hover:border-gray-400'}`}
+                          >
+                            {a}
+                          </button>
+                        )
+                      ))}
+                    </div>
                   </div>
-                  <div className="flex gap-1 shrink-0">
-                    {(['create', 'merge', 'skip'] as const).map(a => (
-                      (!row._match && a === 'merge') ? null :
-                      (row._match && a === 'create') ? null : (
-                        <button
-                          key={a}
-                          onClick={() => setRowAction(idx, a)}
-                          className={`text-xs px-2 py-0.5 rounded border ${row._action === a ? 'bg-gray-900 text-white border-gray-900' : 'text-gray-600 border-gray-200 hover:border-gray-400'}`}
-                        >
-                          {a}
-                        </button>
-                      )
-                    ))}
-                  </div>
+                  {row.roles.length > 0 && (
+                    <div className="flex gap-1 flex-wrap">
+                      {row.roles.map(r => (
+                        <Badge key={r} variant="secondary" className="text-xs">{r}</Badge>
+                      ))}
+                    </div>
+                  )}
                 </div>
               )
             })}
@@ -283,21 +443,9 @@ export default function ImportUploader() {
   return (
     <Card>
       <CardHeader>
-        <CardTitle className="text-base">Upload CSV from Squarespace</CardTitle>
+        <CardTitle className="text-base">Upload CSV</CardTitle>
       </CardHeader>
       <CardContent className="space-y-4">
-        <div className="space-y-2">
-          <Label>Source Form</Label>
-          <Select value={sourceForm} onValueChange={(v) => setSourceForm(v ?? '')}>
-            <SelectTrigger>
-              <SelectValue placeholder="What form is this export from?" />
-            </SelectTrigger>
-            <SelectContent>
-              {SOURCE_FORMS.map(f => <SelectItem key={f} value={f}>{f}</SelectItem>)}
-            </SelectContent>
-          </Select>
-        </div>
-
         <div className="space-y-2">
           <Label>CSV File</Label>
           <div
@@ -314,6 +462,23 @@ export default function ImportUploader() {
             )}
             <input ref={fileRef} type="file" accept=".csv" className="hidden" onChange={handleFile} />
           </div>
+        </div>
+
+        <div className="space-y-2">
+          <Label>Source</Label>
+          <Select value={sourceForm} onValueChange={(v) => setSourceForm(v ?? '')}>
+            <SelectTrigger>
+              <SelectValue placeholder="What is this CSV from?" />
+            </SelectTrigger>
+            <SelectContent>
+              {SOURCE_FORMS.map(f => <SelectItem key={f} value={f}>{f}</SelectItem>)}
+            </SelectContent>
+          </Select>
+          {sourceForm === 'Squarespace Contacts Export' && (
+            <p className="text-xs text-gray-500">
+              Will auto-map Mailing Lists → role flags, Shipping fields → address, Donation Count → donor status.
+            </p>
+          )}
         </div>
 
         <Button onClick={handlePreview} disabled={!rows.length || !sourceForm || loading}>
