@@ -341,10 +341,37 @@ export default function ImportUploader() {
 
       // Generate actions for new contacts only
       if (row._action === 'create') {
+        const dateAdded = contactData.date_added ? new Date(contactData.date_added as string) : null
+        const now = new Date()
+        const daysSince = dateAdded ? Math.floor((now.getTime() - dateAdded.getTime()) / 86400000) : null
+        const year = dateAdded ? dateAdded.getFullYear() : null
+
+        const priority = daysSince !== null && daysSince <= 7 ? 'High' : year && year >= 2026 ? 'Medium' : 'Low'
+        const dueDays = daysSince !== null && daysSince <= 3 ? 0 : daysSince !== null && daysSince <= 7 ? 1 : year && year >= 2026 ? 3 : 7
+        const dueDate = new Date(Date.now() + dueDays * 86400000).toISOString().split('T')[0]
+        const isOld = !year || year < 2026
+
         const actions: { title: string; area: string; ask: string }[] = []
-        if (contactData.is_volunteer) actions.push({ title: `Welcome ${firstName} and ask how they can help`, area: 'Volunteers', ask: "Ask what kind of volunteering they're interested in and invite them to join Discord." })
-        if (contactData.is_signature_collector) actions.push({ title: `Follow up with ${firstName} about collecting signatures`, area: 'Signature Collection', ask: 'Ask if they can collect 10 signatures this week and join Discord.' })
-        if (contactData.is_donor) actions.push({ title: `Send thank-you to ${firstName}`, area: 'Donations', ask: 'Thank them for their donation. Ask if they want to help beyond donating.' })
+
+        if (contactData.is_volunteer) actions.push({
+          title: isOld ? `Check in with ${firstName} about their interest` : `Welcome ${firstName} and ask how they can help`,
+          area: 'Volunteers',
+          ask: isOld
+            ? `You expressed interest in the campaign last year. We are now collecting signatures and looking for active volunteers — would you still like to help?`
+            : `Ask what kind of volunteering they're interested in and invite them to join Discord.`,
+        })
+        if (contactData.is_signature_collector) actions.push({
+          title: isOld ? `Check in with ${firstName} about collecting signatures` : `Follow up with ${firstName} about collecting signatures`,
+          area: 'Signature Collection',
+          ask: isOld
+            ? `You signed up to collect signatures last year. We still need collectors — can you collect 10 signatures this week?`
+            : `Ask if they can collect 10 signatures this week and join Discord.`,
+        })
+        if (contactData.is_donor) actions.push({
+          title: `Send thank-you to ${firstName}`,
+          area: 'Donations',
+          ask: `Thank them for their donation. Ask if they want to help beyond donating.`,
+        })
 
         for (const action of actions) {
           await supabase.from('actions').insert({
@@ -354,9 +381,9 @@ export default function ImportUploader() {
             title: action.title,
             suggested_ask: action.ask,
             assigned_to: 'admin',
-            priority: 'Medium',
+            priority,
             status: 'Not started',
-            due_date: new Date(Date.now() + 2 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+            due_date: dueDate,
           })
         }
       }
