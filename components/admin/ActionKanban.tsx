@@ -21,6 +21,7 @@ type Action = {
   sent_at: string | null
   updated_at: string
   contact: { id: string; full_name: string; email: string; date_added: string } | null
+  org: { id: string; name: string; org_type: string } | null
 }
 
 function daysSince(isoDate: string): number {
@@ -190,7 +191,7 @@ function ActionCard({
         )}
       </div>
 
-      {/* Contact */}
+      {/* Contact or Org */}
       {action.contact && (
         <div>
           <Link href={`/contacts/${action.contact.id}`} className="font-semibold text-gray-900 hover:text-blue-600">
@@ -198,6 +199,16 @@ function ActionCard({
           </Link>
           {action.contact.email && (
             <div className="text-gray-500">{action.contact.email}</div>
+          )}
+        </div>
+      )}
+      {!action.contact && action.org && (
+        <div className="flex items-center gap-2 flex-wrap">
+          <Link href={`/organizations/${action.org.id}`} className="font-semibold text-gray-900 hover:text-blue-600">
+            {action.org.name}
+          </Link>
+          {action.org.org_type && (
+            <span className="text-gray-500 border border-gray-200 rounded px-1.5 py-0.5 text-sm">{action.org.org_type}</span>
           )}
         </div>
       )}
