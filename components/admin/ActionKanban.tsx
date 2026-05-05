@@ -132,11 +132,10 @@ export default function ActionKanban({ initialActions }: { initialActions: Actio
                         isDragDisabled={col.key === 'closed'}
                       >
                         {(provided, snapshot) => (
-                          <div ref={provided.innerRef} {...provided.draggableProps}>
+                          <div ref={provided.innerRef} {...provided.draggableProps} {...provided.dragHandleProps}>
                             <ActionCard
                               action={action}
                               colKey={col.key}
-                              dragHandleProps={provided.dragHandleProps ?? undefined}
                               isDragging={snapshot.isDragging}
                               isClosing={closingId === action.id}
                               onClose={outcome => closeAction(action.id, outcome)}
@@ -162,7 +161,6 @@ export default function ActionKanban({ initialActions }: { initialActions: Actio
 function ActionCard({
   action,
   colKey,
-  dragHandleProps,
   isDragging,
   isClosing,
   onClose,
@@ -171,7 +169,6 @@ function ActionCard({
 }: {
   action: Action
   colKey: ColKey
-  dragHandleProps?: Record<string, any>
   isDragging: boolean
   isClosing: boolean
   onClose: (outcome: string) => void
@@ -188,17 +185,8 @@ function ActionCard({
 
   return (
     <div className={`bg-white rounded-lg border p-2.5 shadow-sm space-y-1.5 ${isDragging ? 'shadow-xl rotate-1 border-blue-200' : 'border-gray-200'}`}>
-      {/* Header row: drag handle + priority + type */}
+      {/* Header row: priority + type */}
       <div className="flex items-start gap-1.5">
-        {!isClosed && dragHandleProps && (
-          <span
-            {...dragHandleProps}
-            className="text-gray-300 hover:text-gray-500 cursor-grab active:cursor-grabbing select-none pt-0.5 text-lg leading-none"
-            title="Drag to move"
-          >
-            ⠿
-          </span>
-        )}
         <div className="flex-1 min-w-0 space-y-1">
           <div className="flex items-center gap-1.5 flex-wrap">
             {action.priority === 'High' && <Badge variant="destructive">High</Badge>}
