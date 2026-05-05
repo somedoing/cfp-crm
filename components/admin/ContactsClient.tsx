@@ -73,28 +73,18 @@ export default function ContactsClient({
   const [sortCol, setSortCol] = useState<SortCol>('date_added')
   const [sortDir, setSortDir] = useState<SortDir>('desc')
   const [selected, setSelected] = useState<Set<string>>(new Set())
-  const [addedIds, setAddedIds] = useState<Set<string>>(new Set())
-  const [removedIds, setRemovedIds] = useState<Set<string>>(new Set())
+  const [pipelineIds, setPipelineIds] = useState<Set<string>>(() => new Set(openContactIds))
   const [batchAdding, setBatchAdding] = useState(false)
 
-  const openIds = useMemo(
-    () => {
-      const s = new Set([...openContactIds, ...addedIds])
-      removedIds.forEach(id => s.delete(id))
-      return s
-    },
-    [openContactIds, addedIds, removedIds]
-  )
-
   const needsOutreachCount = useMemo(
-    () => contacts.filter(c => !c.do_not_contact && !openIds.has(c.id)).length,
-    [contacts, openIds]
+    () => contacts.filter(c => !c.do_not_contact && !pipelineIds.has(c.id)).length,
+    [contacts, pipelineIds]
   )
 
   const filtered = useMemo(() => {
     let result = contacts.filter(c => !c.do_not_contact)
 
-    if (outreachFilter === 'needs') result = result.filter(c => !openIds.has(c.id))
+    if (outreachFilter === 'needs') result = result.filter(c => !pipelineIds.has(c.id))
     if (typeFilter === 'volunteer') result = result.filter(c => c.is_volunteer)
     if (typeFilter === 'donor') result = result.filter(c => c.is_donor)
     if (typeFilter === 'sig') result = result.filter(c => c.is_signature_collector)
@@ -128,7 +118,7 @@ export default function ContactsClient({
     })
 
     return result
-  }, [contacts, search, typeFilter, outreachFilter, openIds, sortCol, sortDir])
+  }, [contacts, search, typeFilter, outreachFilter, pipelineIds, sortCol, sortDir])
 
   const visible = filtered.slice(0, 200)
   const visibleIds = useMemo(() => new Set(visible.map(c => c.id)), [visible])
@@ -175,47 +165,27 @@ export default function ContactsClient({
   }
 
   async function addSelected() {
-    const toAdd = visible.filter(c => selected.has(c.id) && !openIds.has(c.id))
+    const toAdd = visible.filter(c => selected.has(c.id) && !pipelineIds.has(c.id))
     if (toAdd.length === 0) return
-
     setBatchAdding(true)
-    const rows = toAdd.map(actionParamsForContact)
-    await supabase.from('actions').insert(rows)
-    const newIds = new Set(toAdd.map(c => c.id))
-    setAddedIds(prev => new Set([...prev, ...newIds]))
-    setSelected(prev => {
-      const next = new Set(prev)
-      newIds.forEach(id => next.delete(id))
-      return next
-    })
+    setPipelineIds(prev => new Set([...prev, ...toAdd.map(c => c.id)]))
+    setSelected(new Set())
+    await supabase.from('actions').insert(toAdd.map(actionParamsForContact))
     setBatchAdding(false)
   }
 
   async function removeFromPipeline(contactId: string) {
-    setRemovedIds(prev => new Set([...prev, contactId]))
-    const { data } = await supabase
+    setPipelineIds(prev => { const n = new Set(prev); n.delete(contactId); return n })
+    await supabase
       .from('actions')
-      .select('id')
+      .delete()
       .eq('contact_id', contactId)
       .not('status', 'in', '("Done","Committed","Declined","Unresponsive","Dropped","Skipped")')
-    if (data && data.length > 0) {
-      await supabase.from('actions').delete().in('id', data.map((a: any) => a.id))
-    }
   }
 
   async function addSingle(contact: Contact) {
-    setSelected(prev => {
-      const next = new Set(prev)
-      next.add(contact.id)
-      return next
-    })
+    setPipelineIds(prev => new Set([...prev, contact.id]))
     await supabase.from('actions').insert(actionParamsForContact(contact))
-    setAddedIds(prev => new Set([...prev, contact.id]))
-    setSelected(prev => {
-      const next = new Set(prev)
-      next.delete(contact.id)
-      return next
-    })
   }
 
   const typeOptions = [
@@ -402,7 +372,7 @@ export default function ContactsClient({
           </thead>
           <tbody className="divide-y divide-gray-100">
             {visible.map(contact => {
-              const inPipeline = openIds.has(contact.id)
+              const inPipeline = pipelineIds.has(contact.id)
               const isSelected = selected.has(contact.id)
               const location = [contact.town, contact.state].filter(Boolean).join(', ')
 
