@@ -22,7 +22,7 @@ type Contact = {
   do_not_contact: boolean
 }
 
-type SortCol = 'date_added' | 'full_name' | 'town'
+type SortCol = 'date_added' | 'full_name' | 'town' | 'volunteer_stage'
 type SortDir = 'asc' | 'desc'
 
 function priorityScore(p: string | null) {
@@ -116,6 +116,8 @@ export default function ContactsClient({
         cmp = (a.full_name ?? '').localeCompare(b.full_name ?? '')
       } else if (sortCol === 'town') {
         cmp = (a.town ?? '').localeCompare(b.town ?? '')
+      } else if (sortCol === 'volunteer_stage') {
+        cmp = (a.volunteer_stage ?? 'zzz').localeCompare(b.volunteer_stage ?? 'zzz')
       }
       return sortDir === 'asc' ? cmp : -cmp
     })
@@ -206,6 +208,40 @@ export default function ContactsClient({
     { key: 'sig', label: 'Signature' },
   ] as const
 
+  function downloadCSV() {
+    const label = typeFilter === 'volunteer' ? 'volunteers' : typeFilter === 'donor' ? 'donors' : typeFilter === 'sig' ? 'sig-collectors' : 'contacts'
+    const date = new Date().toISOString().split('T')[0]
+    const filename = `${label}-${date}.csv`
+
+    const headers = ['Name', 'Email', 'Phone', 'Town', 'State', 'Volunteer', 'Donor', 'Signature Collector', 'Volunteer Stage', 'Donor Stage', 'Date Added', 'Priority']
+    const rows = filtered.map(c => [
+      c.full_name ?? '',
+      c.email ?? '',
+      c.phone ?? '',
+      c.town ?? '',
+      c.state ?? '',
+      c.is_volunteer ? 'Yes' : 'No',
+      c.is_donor ? 'Yes' : 'No',
+      c.is_signature_collector ? 'Yes' : 'No',
+      c.volunteer_stage ?? '',
+      c.donor_stage ?? '',
+      c.date_added ?? '',
+      c.priority ?? '',
+    ])
+
+    const csv = [headers, ...rows]
+      .map(row => row.map(cell => `"${String(cell).replace(/"/g, '""')}"`).join(','))
+      .join('\n')
+
+    const blob = new Blob([csv], { type: 'text/csv' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = filename
+    a.click()
+    URL.revokeObjectURL(url)
+  }
+
   function SortArrow({ col }: { col: SortCol }) {
     if (sortCol !== col) return <span className="text-gray-300 ml-1">↕</span>
     return <span className="ml-1">{sortDir === 'asc' ? '↑' : '↓'}</span>
@@ -222,7 +258,15 @@ export default function ContactsClient({
             </p>
           )}
         </div>
-        <span className="text-gray-500">{filtered.length.toLocaleString()} shown</span>
+        <div className="flex items-center gap-3">
+          <span className="text-gray-500">{filtered.length.toLocaleString()} shown</span>
+          <button
+            onClick={downloadCSV}
+            className="border border-gray-300 rounded-lg px-3 py-1.5 text-gray-600 hover:bg-gray-50 hover:border-gray-400 transition-colors"
+          >
+            ↓ Download CSV
+          </button>
+        </div>
       </div>
 
       {/* Filters */}
@@ -326,6 +370,12 @@ export default function ContactsClient({
               <th className="text-left px-4 py-3 font-medium text-gray-500">Type</th>
               <th
                 className="text-left px-4 py-3 font-medium text-gray-500 cursor-pointer hover:text-gray-800 select-none"
+                onClick={() => toggleSort('volunteer_stage')}
+              >
+                Stage <SortArrow col="volunteer_stage" />
+              </th>
+              <th
+                className="text-left px-4 py-3 font-medium text-gray-500 cursor-pointer hover:text-gray-800 select-none"
                 onClick={() => toggleSort('date_added')}
               >
                 Added <SortArrow col="date_added" />
@@ -375,6 +425,9 @@ export default function ContactsClient({
                       {contact.is_donor && <Badge variant="secondary">Donor</Badge>}
                       {contact.is_signature_collector && <Badge variant="secondary">Sig</Badge>}
                     </div>
+                  </td>
+                  <td className="px-4 py-3 text-gray-500">
+                    {contact.volunteer_stage ?? contact.donor_stage ?? '—'}
                   </td>
                   <td className="px-4 py-3 text-gray-500">{contact.date_added ?? '—'}</td>
                   <td className="px-4 py-3 text-right" onClick={e => e.stopPropagation()}>
