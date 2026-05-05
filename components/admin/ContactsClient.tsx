@@ -53,7 +53,7 @@ function actionParamsForContact(contact: Contact) {
     action_type: 'Follow-up',
     action_area: 'General Supporter Follow-Up',
     assigned_to: 'admin',
-    status: 'Not started',
+    status: 'Needs Review',
     due_date: dueDate.toISOString().split('T')[0],
   }
 }

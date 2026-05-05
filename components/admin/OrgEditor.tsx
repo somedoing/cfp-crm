@@ -84,7 +84,7 @@ export default function OrgEditor({ org }: { org: OrgData | null }) {
       action_type: 'Email',
       action_area: 'Organization Outreach',
       assigned_to: 'admin',
-      status: 'Not started',
+      status: 'Needs Review',
       due_date: dueDate.toISOString().split('T')[0],
     })
     router.push('/actions')
