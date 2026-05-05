@@ -69,7 +69,7 @@ export default function ContactsClient({
 
   const [search, setSearch] = useState('')
   const [typeFilter, setTypeFilter] = useState<'all' | 'volunteer' | 'donor' | 'sig'>('all')
-  const [outreachFilter, setOutreachFilter] = useState<'needs' | 'all'>('needs')
+  const [outreachFilter, setOutreachFilter] = useState<'needs' | 'all'>('all')
   const [sortCol, setSortCol] = useState<SortCol>('date_added')
   const [sortDir, setSortDir] = useState<SortDir>('desc')
   const [selected, setSelected] = useState<Set<string>>(new Set())
@@ -392,7 +392,7 @@ export default function ContactsClient({
               return (
                 <tr
                   key={contact.id}
-                  className={`hover:bg-gray-50 cursor-pointer ${isSelected ? 'bg-blue-50' : ''} ${inPipeline && outreachFilter === 'all' ? 'opacity-40' : ''}`}
+                  className={`hover:bg-gray-50 ${!inPipeline ? 'cursor-pointer' : ''} ${isSelected ? 'bg-blue-50' : ''}`}
                   onClick={() => !inPipeline && toggleRow(contact.id)}
                 >
                   <td className="px-4 py-3" onClick={e => e.stopPropagation()}>
