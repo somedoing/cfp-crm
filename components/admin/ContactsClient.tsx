@@ -74,11 +74,16 @@ export default function ContactsClient({
   const [sortDir, setSortDir] = useState<SortDir>('desc')
   const [selected, setSelected] = useState<Set<string>>(new Set())
   const [addedIds, setAddedIds] = useState<Set<string>>(new Set())
+  const [removedIds, setRemovedIds] = useState<Set<string>>(new Set())
   const [batchAdding, setBatchAdding] = useState(false)
 
   const openIds = useMemo(
-    () => new Set([...openContactIds, ...addedIds]),
-    [openContactIds, addedIds]
+    () => {
+      const s = new Set([...openContactIds, ...addedIds])
+      removedIds.forEach(id => s.delete(id))
+      return s
+    },
+    [openContactIds, addedIds, removedIds]
   )
 
   const needsOutreachCount = useMemo(
@@ -184,6 +189,18 @@ export default function ContactsClient({
       return next
     })
     setBatchAdding(false)
+  }
+
+  async function removeFromPipeline(contactId: string) {
+    setRemovedIds(prev => new Set([...prev, contactId]))
+    const { data } = await supabase
+      .from('actions')
+      .select('id')
+      .eq('contact_id', contactId)
+      .not('status', 'in', '("Done","Committed","Declined","Unresponsive","Dropped","Skipped")')
+    if (data && data.length > 0) {
+      await supabase.from('actions').delete().in('id', data.map((a: any) => a.id))
+    }
   }
 
   async function addSingle(contact: Contact) {
@@ -432,7 +449,12 @@ export default function ContactsClient({
                   <td className="px-4 py-3 text-gray-500">{contact.date_added ?? '—'}</td>
                   <td className="px-4 py-3 text-right" onClick={e => e.stopPropagation()}>
                     {inPipeline ? (
-                      <span className="text-gray-400">In pipeline</span>
+                      <button
+                        onClick={e => { e.stopPropagation(); removeFromPipeline(contact.id) }}
+                        className="text-gray-400 hover:text-red-500 border border-gray-200 hover:border-red-300 rounded px-2 py-1 transition-colors"
+                      >
+                        Remove
+                      </button>
                     ) : (
                       <button
                         onClick={() => addSingle(contact)}
