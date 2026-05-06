@@ -132,17 +132,20 @@ export default function ContactDetail({
     }).eq('id', initial.id)
   }
 
-  async function handleVolunteerStage(val: string) {
+  async function handleVolunteerStage(val: string | null) {
+    if (!val) return
     setVolunteerStageState(val)
     await saveField('volunteer_stage', val)
   }
 
-  async function handleDonorStage(val: string) {
+  async function handleDonorStage(val: string | null) {
+    if (!val) return
     setDonorStageState(val)
     await saveField('donor_stage', val)
   }
 
-  async function handlePriority(val: string) {
+  async function handlePriority(val: string | null) {
+    if (!val) return
     setPriorityState(val)
     await saveField('priority', val)
   }
