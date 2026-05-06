@@ -332,7 +332,7 @@ export default function ContactDetail({
         <div className="grid grid-cols-3 gap-3">
           <div className="space-y-1">
             <label className="text-xs text-gray-400">Type</label>
-            <Select value={intType} onValueChange={setIntType}>
+            <Select value={intType} onValueChange={v => v && setIntType(v)}>
               <SelectTrigger className="h-8 text-sm"><SelectValue /></SelectTrigger>
               <SelectContent>
                 {INTERACTION_TYPES.map(t => <SelectItem key={t} value={t}>{t}</SelectItem>)}
@@ -341,7 +341,7 @@ export default function ContactDetail({
           </div>
           <div className="space-y-1">
             <label className="text-xs text-gray-400">Direction</label>
-            <Select value={intDir} onValueChange={setIntDir}>
+            <Select value={intDir} onValueChange={v => v && setIntDir(v)}>
               <SelectTrigger className="h-8 text-sm"><SelectValue /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="Outbound">Outbound</SelectItem>
