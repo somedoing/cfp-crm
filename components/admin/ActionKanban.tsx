@@ -59,6 +59,8 @@ export default function ActionKanban({ initialActions }: { initialActions: Actio
   const supabase = createClient()
   const [actions, setActions] = useState<Action[]>(initialActions)
   const [closingId, setClosingId] = useState<string | null>(null)
+  const [confirmClear, setConfirmClear] = useState(false)
+  const [clearing, setClearing] = useState(false)
 
   function patch(id: string, data: Partial<Action>) {
     setActions(prev => prev.map(a => a.id === id ? { ...a, ...data } : a))
@@ -95,6 +97,17 @@ export default function ActionKanban({ initialActions }: { initialActions: Actio
     await supabase.from('actions').update(updates).eq('id', actionId)
   }
 
+  async function clearPipeline() {
+    setClearing(true)
+    await supabase
+      .from('actions')
+      .delete()
+      .not('status', 'in', '("Done","Committed","Declined","Unresponsive","Dropped","Skipped")')
+    setActions(prev => prev.filter(a => CLOSED_STATUSES.includes(a.status)))
+    setConfirmClear(false)
+    setClearing(false)
+  }
+
   async function closeAction(id: string, outcome: string) {
     const ts = new Date().toISOString()
     const updates = { status: outcome, updated_at: ts, completed_date: new Date().toISOString().split('T')[0] }
@@ -103,8 +116,41 @@ export default function ActionKanban({ initialActions }: { initialActions: Actio
     setClosingId(null)
   }
 
+  const openCount = actions.filter(a => !CLOSED_STATUSES.includes(a.status)).length
+
   return (
     <DragDropContext onDragEnd={onDragEnd}>
+      {openCount > 0 && (
+        <div className="flex items-center justify-end mb-3">
+          {confirmClear ? (
+            <div className="flex items-center gap-3 bg-red-50 border border-red-200 rounded-lg px-3 py-2">
+              <span className="text-red-700 text-sm">
+                Clear all {openCount} open actions? This cannot be undone.
+              </span>
+              <button
+                onClick={clearPipeline}
+                disabled={clearing}
+                className="bg-red-600 text-white rounded px-3 py-1 text-sm hover:bg-red-700 disabled:opacity-50"
+              >
+                {clearing ? 'Clearing…' : 'Yes, clear all'}
+              </button>
+              <button
+                onClick={() => setConfirmClear(false)}
+                className="text-gray-500 hover:text-gray-700 text-sm"
+              >
+                Cancel
+              </button>
+            </div>
+          ) : (
+            <button
+              onClick={() => setConfirmClear(true)}
+              className="text-gray-400 hover:text-red-500 text-sm border border-gray-200 hover:border-red-200 rounded-lg px-3 py-1.5 transition-colors"
+            >
+              Clear pipeline ({openCount})
+            </button>
+          )}
+        </div>
+      )}
       <div className="flex gap-3 items-start overflow-x-auto pb-4">
         {COLUMNS.map(col => {
           const colActions = byColumn[col.key]

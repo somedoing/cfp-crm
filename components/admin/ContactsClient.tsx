@@ -15,6 +15,8 @@ type Contact = {
   is_volunteer: boolean
   is_donor: boolean
   is_signature_collector: boolean
+  is_press_contact: boolean
+  is_media_contact: boolean
   volunteer_stage: string | null
   donor_stage: string | null
   priority: string | null
@@ -68,7 +70,7 @@ export default function ContactsClient({
   const supabase = createClient()
 
   const [search, setSearch] = useState('')
-  const [typeFilter, setTypeFilter] = useState<'all' | 'volunteer' | 'donor' | 'sig'>('all')
+  const [typeFilter, setTypeFilter] = useState<'all' | 'volunteer' | 'donor' | 'sig' | 'press'>('all')
   const [outreachFilter, setOutreachFilter] = useState<'needs' | 'all'>('all')
   const [sortCol, setSortCol] = useState<SortCol>('date_added')
   const [sortDir, setSortDir] = useState<SortDir>('desc')
@@ -88,6 +90,7 @@ export default function ContactsClient({
     if (typeFilter === 'volunteer') result = result.filter(c => c.is_volunteer)
     if (typeFilter === 'donor') result = result.filter(c => c.is_donor)
     if (typeFilter === 'sig') result = result.filter(c => c.is_signature_collector)
+    if (typeFilter === 'press') result = result.filter(c => c.is_press_contact || c.is_media_contact)
 
     if (search.trim()) {
       const q = search.toLowerCase()
@@ -193,6 +196,7 @@ export default function ContactsClient({
     { key: 'volunteer', label: 'Volunteers' },
     { key: 'donor', label: 'Donors' },
     { key: 'sig', label: 'Signature' },
+    { key: 'press', label: 'Press/Media' },
   ] as const
 
   function downloadCSV() {
@@ -247,11 +251,17 @@ export default function ContactsClient({
         </div>
         <div className="flex items-center gap-3">
           <span className="text-gray-500">{filtered.length.toLocaleString()} shown</span>
+          <Link
+            href="/contacts/review"
+            className="border border-blue-200 bg-blue-50 text-blue-700 hover:bg-blue-100 rounded-lg px-3 py-1.5 font-medium transition-colors"
+          >
+            Review wizard →
+          </Link>
           <button
             onClick={downloadCSV}
             className="border border-gray-300 rounded-lg px-3 py-1.5 text-gray-600 hover:bg-gray-50 hover:border-gray-400 transition-colors"
           >
-            ↓ Download CSV
+            ↓ CSV
           </button>
         </div>
       </div>
@@ -411,6 +421,9 @@ export default function ContactsClient({
                       {contact.is_volunteer && <Badge variant="secondary">Vol</Badge>}
                       {contact.is_donor && <Badge variant="secondary">Donor</Badge>}
                       {contact.is_signature_collector && <Badge variant="secondary">Sig</Badge>}
+                      {(contact.is_press_contact || contact.is_media_contact) && (
+                        <Badge className="bg-orange-100 text-orange-700 border-orange-200">Press</Badge>
+                      )}
                     </div>
                   </td>
                   <td className="px-4 py-3 text-gray-500">

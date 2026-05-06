@@ -1,7 +1,7 @@
 import { createClient } from '@/lib/supabase/server'
 import ContactsClient from '@/components/admin/ContactsClient'
 
-const FIELDS = 'id, full_name, email, phone, town, state, is_volunteer, is_donor, is_signature_collector, volunteer_stage, donor_stage, priority, date_added, do_not_contact'
+const FIELDS = 'id, full_name, email, phone, town, state, is_volunteer, is_donor, is_signature_collector, is_press_contact, is_media_contact, volunteer_stage, donor_stage, priority, date_added, do_not_contact'
 const PAGE_SIZE = 1000 // Supabase API caps at 1,000 rows per request
 
 async function fetchAllContacts(supabase: Awaited<ReturnType<typeof createClient>>) {
