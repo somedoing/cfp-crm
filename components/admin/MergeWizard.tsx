@@ -307,12 +307,14 @@ export default function MergeWizard() {
   useEffect(() => { load() }, [load])
 
   // Identical pairs: same email, same (or both empty) first+last name
-  const identicalPairs = pairs.filter(p =>
-    p.reason === 'email' &&
-    p.a.email === p.b.email &&
-    (p.a.first_name ?? '').toLowerCase().trim() === (p.b.first_name ?? '').toLowerCase().trim() &&
-    (p.a.last_name ?? '').toLowerCase().trim() === (p.b.last_name ?? '').toLowerCase().trim()
-  )
+  // Identical = same name AND same email (clearly the same person entered twice)
+  const identicalPairs = pairs.filter(p => {
+    const sameEmail = p.a.email && p.b.email && p.a.email.toLowerCase().trim() === p.b.email.toLowerCase().trim()
+    const sameName =
+      (p.a.first_name ?? '').toLowerCase().trim() === (p.b.first_name ?? '').toLowerCase().trim() &&
+      (p.a.last_name ?? '').toLowerCase().trim() === (p.b.last_name ?? '').toLowerCase().trim()
+    return sameName && (sameEmail || p.reason === 'name')
+  })
 
   async function mergeAllIdentical() {
     if (!identicalPairs.length) return
