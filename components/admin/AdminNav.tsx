@@ -13,6 +13,7 @@ const navItems = [
   { href: '/organizations', label: 'Orgs' },
   { href: '/actions', label: 'Org Pipeline' },
   { href: '/my-pipeline', label: 'My Pipeline' },
+  { href: '/contacts/merge', label: 'Dedup' },
   { href: '/imports', label: 'Imports' },
   { href: '/team', label: 'Team' },
   { href: '/templates', label: 'Templates' },

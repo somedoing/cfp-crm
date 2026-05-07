@@ -39,6 +39,7 @@ type Contact = {
   last_name: string | null
   full_name: string
   email: string | null
+  alternative_emails: string[] | null
   phone: string | null
   town: string | null
   state: string | null
@@ -315,6 +316,11 @@ export default function ContactDetail({
           </Button>
           {infoSaved && <span className="text-green-600 text-sm">Saved</span>}
         </div>
+        {initial.alternative_emails && initial.alternative_emails.length > 0 && (
+          <p className="text-xs text-gray-400 mt-2">
+            Alt emails: {initial.alternative_emails.join(', ')}
+          </p>
+        )}
 
         {/* Flags */}
         <div className="flex flex-wrap gap-1.5 mt-4">
