@@ -227,14 +227,16 @@ export default function ContactDetail({
 
   const [pipelineAdding, setPipelineAdding] = useState(false)
   const [pipelineAdded, setPipelineAdded] = useState<string | null>(null)
+  const [pipelineError, setPipelineError] = useState<string | null>(null)
   const [confirmDelete, setConfirmDelete] = useState(false)
   const [deleting, setDeleting] = useState(false)
 
   async function addToPipeline(status: string) {
     setPipelineAdding(true)
+    setPipelineError(null)
     const priorityMap: Record<string, string> = { Core: 'High', Active: 'Medium', Supporter: 'Low', 'Needs Review': 'Medium' }
     const typeMap: Record<string, string> = { Core: 'Check in', Active: 'Check in', Supporter: 'Check in', 'Needs Review': 'Follow-up' }
-    await supabase.from('actions').insert({
+    const { error } = await supabase.from('actions').insert({
       contact_id: initial.id,
       title: `${displayName} — ${status}`,
       action_type: typeMap[status] ?? 'Follow-up',
@@ -244,7 +246,11 @@ export default function ContactDetail({
       priority: priorityMap[status] ?? 'Medium',
       due_date: new Date().toISOString().split('T')[0],
     })
-    setPipelineAdded(status)
+    if (error) {
+      setPipelineError(error.message)
+    } else {
+      setPipelineAdded(status)
+    }
     setPipelineAdding(false)
   }
 
@@ -413,6 +419,9 @@ export default function ContactDetail({
       {/* Pipeline quick-add */}
       <div className="bg-white rounded-xl border border-gray-200 p-4">
         <p className="text-xs text-gray-400 font-medium uppercase tracking-wide mb-3">Add to pipeline</p>
+        {pipelineError && (
+          <p className="text-sm text-red-600 font-medium">Error: {pipelineError}</p>
+        )}
         {pipelineAdded ? (
           <p className="text-sm text-green-600 font-medium">✓ Added to {pipelineAdded} — <Link href="/actions" className="underline">view pipeline</Link></p>
         ) : (
