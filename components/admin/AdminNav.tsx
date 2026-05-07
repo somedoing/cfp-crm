@@ -9,7 +9,8 @@ const navItems = [
   { href: '/dashboard', label: 'Dashboard' },
   { href: '/contacts', label: 'Contacts' },
   { href: '/organizations', label: 'Orgs' },
-  { href: '/actions', label: 'Pipeline' },
+  { href: '/actions', label: 'Org Pipeline' },
+  { href: '/my-pipeline', label: 'My Pipeline' },
   { href: '/imports', label: 'Imports' },
   { href: '/team', label: 'Team' },
 ]
