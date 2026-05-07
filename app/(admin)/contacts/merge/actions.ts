@@ -13,7 +13,7 @@ export async function fetchDuplicatePairs() {
     .from('contacts')
     .select(FIELDS)
     .order('id', { ascending: true })
-    .range(0, 49999)
+    .range(0, 9999)
 
   if (error) return { error: error.message, pairs: [] }
   if (!contacts) return { pairs: [] }
