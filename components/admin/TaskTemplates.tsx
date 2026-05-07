@@ -107,85 +107,6 @@ export default function TaskTemplates({ initialTemplates }: { initialTemplates: 
     setTemplates(prev => prev.filter(t => t.id !== id))
   }
 
-  const FormPanel = () => (
-    <div className="bg-white rounded-xl border border-gray-200 p-4 space-y-3">
-      <h3 className="font-semibold text-gray-900">{editing === 'new' ? 'New template' : 'Edit template'}</h3>
-
-      <div className="space-y-1">
-        <label className="text-xs text-gray-500 font-medium">Title *</label>
-        <Input
-          value={form.title}
-          onChange={e => setForm(f => ({ ...f, title: e.target.value }))}
-          placeholder="e.g. Volunteer outreach — first contact"
-          className="h-8 text-sm"
-        />
-      </div>
-
-      <div className="space-y-1">
-        <label className="text-xs text-gray-500 font-medium">Description (internal context for the sender)</label>
-        <Textarea
-          value={form.description}
-          onChange={e => setForm(f => ({ ...f, description: e.target.value }))}
-          placeholder="What is this task for? What should the sender know?"
-          className="text-sm h-16 resize-none"
-        />
-      </div>
-
-      <div className="space-y-1">
-        <label className="text-xs text-gray-500 font-medium">Suggested ask (shown to sender)</label>
-        <Textarea
-          value={form.suggested_ask}
-          onChange={e => setForm(f => ({ ...f, suggested_ask: e.target.value }))}
-          placeholder="What should they ask or accomplish in this contact?"
-          className="text-sm h-14 resize-none"
-        />
-      </div>
-
-      <div className="space-y-1">
-        <label className="text-xs text-gray-500 font-medium">Message template (sender can copy/adapt)</label>
-        <Textarea
-          value={form.suggested_message}
-          onChange={e => setForm(f => ({ ...f, suggested_message: e.target.value }))}
-          placeholder="Draft message the sender can adapt and send…"
-          className="text-sm h-24 resize-none"
-        />
-      </div>
-
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-        <div className="space-y-1">
-          <label className="text-xs text-gray-500 font-medium">Action type</label>
-          <Select value={form.action_type} onValueChange={v => setForm(f => ({ ...f, action_type: v ?? f.action_type }))}>
-            <SelectTrigger className="h-8 text-sm"><SelectValue /></SelectTrigger>
-            <SelectContent>{ACTION_TYPES.map(t => <SelectItem key={t} value={t}>{t}</SelectItem>)}</SelectContent>
-          </Select>
-        </div>
-        <div className="space-y-1">
-          <label className="text-xs text-gray-500 font-medium">Area</label>
-          <Select value={form.action_area} onValueChange={v => setForm(f => ({ ...f, action_area: v ?? f.action_area }))}>
-            <SelectTrigger className="h-8 text-sm"><SelectValue /></SelectTrigger>
-            <SelectContent>{ACTION_AREAS.map(a => <SelectItem key={a} value={a}>{a}</SelectItem>)}</SelectContent>
-          </Select>
-        </div>
-        <div className="space-y-1">
-          <label className="text-xs text-gray-500 font-medium">Priority</label>
-          <Select value={form.priority} onValueChange={v => setForm(f => ({ ...f, priority: v ?? f.priority }))}>
-            <SelectTrigger className="h-8 text-sm"><SelectValue /></SelectTrigger>
-            <SelectContent>{PRIORITIES.map(p => <SelectItem key={p} value={p}>{p}</SelectItem>)}</SelectContent>
-          </Select>
-        </div>
-      </div>
-
-      {error && <p className="text-red-600 text-sm">{error}</p>}
-
-      <div className="flex gap-2">
-        <Button onClick={handleSave} disabled={saving} size="sm">
-          {saving ? 'Saving…' : 'Save template'}
-        </Button>
-        <Button variant="ghost" size="sm" onClick={cancelEdit}>Cancel</Button>
-      </div>
-    </div>
-  )
-
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
@@ -198,7 +119,84 @@ export default function TaskTemplates({ initialTemplates }: { initialTemplates: 
         )}
       </div>
 
-      {editing && <FormPanel />}
+      {editing && (
+        <div className="bg-white rounded-xl border border-gray-200 p-4 space-y-3">
+          <h3 className="font-semibold text-gray-900">{editing === 'new' ? 'New template' : 'Edit template'}</h3>
+
+          <div className="space-y-1">
+            <label className="text-xs text-gray-500 font-medium">Title *</label>
+            <Input
+              value={form.title}
+              onChange={e => setForm(f => ({ ...f, title: e.target.value }))}
+              placeholder="e.g. Volunteer outreach — first contact"
+              className="h-8 text-sm"
+            />
+          </div>
+
+          <div className="space-y-1">
+            <label className="text-xs text-gray-500 font-medium">Description (internal context for the sender)</label>
+            <Textarea
+              value={form.description}
+              onChange={e => setForm(f => ({ ...f, description: e.target.value }))}
+              placeholder="What is this task for? What should the sender know?"
+              className="text-sm h-16 resize-none"
+            />
+          </div>
+
+          <div className="space-y-1">
+            <label className="text-xs text-gray-500 font-medium">Suggested ask (shown to sender)</label>
+            <Textarea
+              value={form.suggested_ask}
+              onChange={e => setForm(f => ({ ...f, suggested_ask: e.target.value }))}
+              placeholder="What should they ask or accomplish in this contact?"
+              className="text-sm h-14 resize-none"
+            />
+          </div>
+
+          <div className="space-y-1">
+            <label className="text-xs text-gray-500 font-medium">Message template (sender can copy/adapt)</label>
+            <Textarea
+              value={form.suggested_message}
+              onChange={e => setForm(f => ({ ...f, suggested_message: e.target.value }))}
+              placeholder="Draft message the sender can adapt and send…"
+              className="text-sm h-24 resize-none"
+            />
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <div className="space-y-1">
+              <label className="text-xs text-gray-500 font-medium">Action type</label>
+              <Select value={form.action_type} onValueChange={v => setForm(f => ({ ...f, action_type: v ?? f.action_type }))}>
+                <SelectTrigger className="h-8 text-sm"><SelectValue /></SelectTrigger>
+                <SelectContent>{ACTION_TYPES.map(t => <SelectItem key={t} value={t}>{t}</SelectItem>)}</SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1">
+              <label className="text-xs text-gray-500 font-medium">Area</label>
+              <Select value={form.action_area} onValueChange={v => setForm(f => ({ ...f, action_area: v ?? f.action_area }))}>
+                <SelectTrigger className="h-8 text-sm"><SelectValue /></SelectTrigger>
+                <SelectContent>{ACTION_AREAS.map(a => <SelectItem key={a} value={a}>{a}</SelectItem>)}</SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1">
+              <label className="text-xs text-gray-500 font-medium">Priority</label>
+              <Select value={form.priority} onValueChange={v => setForm(f => ({ ...f, priority: v ?? f.priority }))}>
+                <SelectTrigger className="h-8 text-sm"><SelectValue /></SelectTrigger>
+                <SelectContent>{PRIORITIES.map(p => <SelectItem key={p} value={p}>{p}</SelectItem>)}</SelectContent>
+              </Select>
+            </div>
+          </div>
+
+          {error && <p className="text-red-600 text-sm">{error}</p>}
+
+          <div className="flex gap-2">
+            <Button onClick={handleSave} disabled={saving} size="sm">
+              {saving ? 'Saving…' : 'Save template'}
+            </Button>
+            <Button variant="ghost" size="sm" onClick={cancelEdit}>Cancel</Button>
+          </div>
+        </div>
+      )}
 
       {templates.length === 0 && !editing && (
         <div className="text-center py-16 text-gray-400">
