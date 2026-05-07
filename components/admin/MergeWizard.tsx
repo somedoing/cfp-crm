@@ -1,9 +1,11 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import Link from 'next/link'
-import { useRouter } from 'next/navigation'
+import { createClient } from '@/lib/supabase/client'
 import { mergeContacts } from '@/app/(admin)/contacts/merge/actions'
+
+const FIELDS = 'id, display_id, first_name, last_name, full_name, email, alternative_emails, phone, town, state, zip, county, source, original_source_form, notes, date_added, is_volunteer, is_active_volunteer, is_donor, is_signature_collector, is_supporter, is_media_contact, is_press_contact, is_coalition_contact, is_candidate_partner, newsletter_subscriber, email_opt_in, text_opt_in, in_discord, discord_username, volunteer_stage, donor_stage, signature_stage, priority, tags, do_not_contact'
 
 type Contact = {
   id: string
@@ -72,6 +74,65 @@ const BOOL_FLAGS: (keyof Contact)[] = [
   'in_discord', 'do_not_contact',
 ]
 
+async function fetchAllContacts(): Promise<Contact[]> {
+  const supabase = createClient()
+  const all: Contact[] = []
+  let page = 0
+  while (true) {
+    const { data } = await supabase
+      .from('contacts')
+      .select(FIELDS)
+      .order('date_added', { ascending: true, nullsFirst: true })
+      .range(page * 1000, (page + 1) * 1000 - 1)
+    if (!data || data.length === 0) break
+    all.push(...(data as Contact[]))
+    if (data.length < 1000) break
+    page++
+  }
+  return all
+}
+
+function computePairs(contacts: Contact[]): DupePair[] {
+  const emailGroups = new Map<string, Contact[]>()
+  for (const c of contacts) {
+    if (!c.email?.trim()) continue
+    const key = c.email.toLowerCase().trim()
+    if (!emailGroups.has(key)) emailGroups.set(key, [])
+    emailGroups.get(key)!.push(c)
+  }
+
+  const nameGroups = new Map<string, Contact[]>()
+  for (const c of contacts) {
+    const first = (c.first_name ?? '').toLowerCase().trim()
+    const last = (c.last_name ?? '').toLowerCase().trim()
+    if (!first || !last) continue
+    const key = `${first}|${last}`
+    if (!nameGroups.has(key)) nameGroups.set(key, [])
+    nameGroups.get(key)!.push(c)
+  }
+
+  const seenPairs = new Set<string>()
+  const pairs: DupePair[] = []
+
+  function addPairs(groups: Map<string, Contact[]>, reason: 'email' | 'name') {
+    for (const group of groups.values()) {
+      if (group.length < 2) continue
+      for (let i = 0; i < group.length; i++) {
+        for (let j = i + 1; j < group.length; j++) {
+          const pairKey = [group[i].id, group[j].id].sort().join('|')
+          if (seenPairs.has(pairKey)) continue
+          seenPairs.add(pairKey)
+          pairs.push({ key: pairKey, reason, a: group[i], b: group[j] })
+        }
+      }
+    }
+  }
+
+  addPairs(emailGroups, 'email')
+  addPairs(nameGroups, 'name')
+  return pairs
+}
+
 function defaultChoices(a: Contact, b: Contact): Record<string, 'a' | 'b'> {
   const choices: Record<string, 'a' | 'b'> = {}
   for (const { key } of CHOICE_FIELDS) {
@@ -80,8 +141,7 @@ function defaultChoices(a: Contact, b: Contact): Record<string, 'a' | 'b'> {
   return choices
 }
 
-function PairRow({ pair, onDismiss }: { pair: DupePair; onDismiss: () => void }) {
-  const router = useRouter()
+function PairRow({ pair, onDismiss, onMerged }: { pair: DupePair; onDismiss: (key: string) => void; onMerged: (key: string) => void }) {
   const [open, setOpen] = useState(false)
   const [primaryId, setPrimaryId] = useState(pair.a.id)
   const [fieldChoices, setFieldChoices] = useState<Record<string, 'a' | 'b'>>(() => defaultChoices(pair.a, pair.b))
@@ -104,8 +164,7 @@ function PairRow({ pair, onDismiss }: { pair: DupePair; onDismiss: () => void })
   }
 
   const conflicts = CHOICE_FIELDS.filter(({ key }) => {
-    const aVal = a[key]
-    const bVal = b[key]
+    const aVal = a[key]; const bVal = b[key]
     return aVal && bVal && aVal !== bVal
   })
 
@@ -118,10 +177,8 @@ function PairRow({ pair, onDismiss }: { pair: DupePair; onDismiss: () => void })
     const mergedData: Record<string, unknown> = {}
 
     for (const { key } of CHOICE_FIELDS) {
-      const val = fieldChoices[key as string] === 'a' ? a[key] : b[key]
-      mergedData[key as string] = val || null
+      mergedData[key as string] = (fieldChoices[key as string] === 'a' ? a[key] : b[key]) || null
     }
-
     for (const flag of BOOL_FLAGS) {
       mergedData[flag as string] = !!(a[flag] || b[flag])
     }
@@ -140,13 +197,8 @@ function PairRow({ pair, onDismiss }: { pair: DupePair; onDismiss: () => void })
       mergedData.notes = primary.notes || secondary.notes || null
     }
 
-    const altEmails = [
-      ...(primary.alternative_emails ?? []),
-      ...(secondary.alternative_emails ?? []),
-    ]
-    if (secondary.email && secondary.email !== primary.email) {
-      altEmails.push(secondary.email)
-    }
+    const altEmails = [...(primary.alternative_emails ?? []), ...(secondary.alternative_emails ?? [])]
+    if (secondary.email && secondary.email !== primary.email) altEmails.push(secondary.email)
     mergedData.alternative_emails = [...new Set(altEmails.filter(Boolean))]
     mergedData.email = primary.email
 
@@ -157,9 +209,7 @@ function PairRow({ pair, onDismiss }: { pair: DupePair; onDismiss: () => void })
         setMerging(false)
         return
       }
-      // Remove pair from local list immediately, refresh server cache in background
-      onDismiss()
-      router.refresh()
+      onMerged(pair.key)
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e))
       setMerging(false)
@@ -168,7 +218,6 @@ function PairRow({ pair, onDismiss }: { pair: DupePair; onDismiss: () => void })
 
   return (
     <div className="border border-gray-200 rounded-xl bg-white overflow-hidden">
-      {/* Header row — always visible */}
       <div className="flex items-center gap-3 px-4 py-3">
         <span className={`text-xs px-1.5 py-0.5 rounded font-medium shrink-0 ${pair.reason === 'email' ? 'bg-blue-100 text-blue-700' : 'bg-purple-100 text-purple-700'}`}>
           {pair.reason}
@@ -177,31 +226,20 @@ function PairRow({ pair, onDismiss }: { pair: DupePair; onDismiss: () => void })
           <span className="text-sm font-medium text-gray-900">{a.full_name || a.email || '—'}</span>
           <span className="text-gray-400 mx-2 text-sm">vs</span>
           <span className="text-sm text-gray-600">{b.full_name || b.email || '—'}</span>
-          {a.email !== b.email && a.email && b.email && (
-            <span className="ml-2 text-xs text-orange-500">different emails</span>
-          )}
+          {hasDifferentEmails && <span className="ml-2 text-xs text-orange-500">different emails</span>}
         </div>
         <div className="flex items-center gap-2 shrink-0">
-          <button
-            onClick={() => { onDismiss() }}
-            className="text-xs text-gray-400 hover:text-gray-600 px-2 py-1 rounded hover:bg-gray-100"
-          >
+          <button onClick={() => onDismiss(pair.key)} className="text-xs text-gray-400 hover:text-gray-600 px-2 py-1 rounded hover:bg-gray-100">
             Not duplicates
           </button>
-          <button
-            onClick={() => setOpen(o => !o)}
-            className="text-xs text-blue-600 hover:text-blue-800 px-2 py-1 rounded hover:bg-blue-50 font-medium"
-          >
+          <button onClick={() => setOpen(o => !o)} className="text-xs text-blue-600 hover:text-blue-800 px-2 py-1 rounded hover:bg-blue-50 font-medium">
             {open ? 'Close ▲' : 'Review ▼'}
           </button>
         </div>
       </div>
 
-      {/* Expanded detail */}
       {open && (
         <div className="border-t border-gray-100 p-4 space-y-4 bg-gray-50">
-
-          {/* Two contact cards */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             {[a, b].map(contact => {
               const isPrimary = contact.id === primaryId
@@ -212,24 +250,22 @@ function PairRow({ pair, onDismiss }: { pair: DupePair; onDismiss: () => void })
                       {isPrimary ? '★ Primary (keep)' : 'Secondary (delete)'}
                     </span>
                     {!isPrimary && (
-                      <button onClick={() => flipPrimary(contact.id)} className="text-xs text-blue-600 hover:underline">
-                        Make primary
-                      </button>
+                      <button onClick={() => flipPrimary(contact.id)} className="text-xs text-blue-600 hover:underline">Make primary</button>
                     )}
                   </div>
                   <p className="font-semibold text-gray-900 truncate">{contact.full_name || '(no name)'}</p>
                   <div className="mt-2 space-y-0.5">
                     {[
-                      { label: 'Email',        value: contact.email },
-                      { label: 'Phone',        value: contact.phone },
-                      { label: 'Town',         value: contact.town },
-                      { label: 'State',        value: contact.state },
-                      { label: 'ZIP',          value: contact.zip },
-                      { label: 'Source',       value: contact.source },
-                      { label: 'Added',        value: contact.date_added },
-                      { label: 'Vol stage',    value: contact.volunteer_stage },
-                      { label: 'Donor stage',  value: contact.donor_stage },
-                      { label: 'Discord',      value: contact.discord_username },
+                      { label: 'Email',       value: contact.email },
+                      { label: 'Phone',       value: contact.phone },
+                      { label: 'Town',        value: contact.town },
+                      { label: 'State',       value: contact.state },
+                      { label: 'ZIP',         value: contact.zip },
+                      { label: 'Source',      value: contact.source },
+                      { label: 'Added',       value: contact.date_added },
+                      { label: 'Vol stage',   value: contact.volunteer_stage },
+                      { label: 'Donor stage', value: contact.donor_stage },
+                      { label: 'Discord',     value: contact.discord_username },
                     ].map(({ label, value }) => (
                       <div key={label} className="flex gap-1.5 text-xs">
                         <span className="text-gray-400 w-20 shrink-0">{label}</span>
@@ -253,7 +289,6 @@ function PairRow({ pair, onDismiss }: { pair: DupePair; onDismiss: () => void })
             })}
           </div>
 
-          {/* Conflicting fields */}
           {conflicts.length > 0 && (
             <div>
               <p className="text-xs text-gray-500 font-medium uppercase tracking-wide mb-2">Conflicting fields — click to pick</p>
@@ -263,18 +298,14 @@ function PairRow({ pair, onDismiss }: { pair: DupePair; onDismiss: () => void })
                   const bVal = String(b[key] ?? '')
                   const choice = fieldChoices[key as string]
                   return (
-                    <div key={key as string} className="flex items-center gap-2 text-sm">
+                    <div key={key as string} className="flex items-center gap-2">
                       <span className="text-gray-400 text-xs w-24 shrink-0">{label}</span>
-                      <button
-                        onClick={() => setFieldChoices(p => ({ ...p, [key as string]: 'a' }))}
-                        className={`px-2 py-1 rounded border text-xs flex-1 text-left truncate transition-colors ${choice === 'a' ? 'bg-blue-600 text-white border-blue-600' : 'bg-white border-gray-200 text-gray-600 hover:border-blue-300'}`}
-                      >
+                      <button onClick={() => setFieldChoices(p => ({ ...p, [key as string]: 'a' }))}
+                        className={`px-2 py-1 rounded border text-xs flex-1 text-left truncate ${choice === 'a' ? 'bg-blue-600 text-white border-blue-600' : 'bg-white border-gray-200 text-gray-600 hover:border-blue-300'}`}>
                         {aVal} {isPrimaryA && <span className="opacity-60">(primary)</span>}
                       </button>
-                      <button
-                        onClick={() => setFieldChoices(p => ({ ...p, [key as string]: 'b' }))}
-                        className={`px-2 py-1 rounded border text-xs flex-1 text-left truncate transition-colors ${choice === 'b' ? 'bg-blue-600 text-white border-blue-600' : 'bg-white border-gray-200 text-gray-600 hover:border-blue-300'}`}
-                      >
+                      <button onClick={() => setFieldChoices(p => ({ ...p, [key as string]: 'b' }))}
+                        className={`px-2 py-1 rounded border text-xs flex-1 text-left truncate ${choice === 'b' ? 'bg-blue-600 text-white border-blue-600' : 'bg-white border-gray-200 text-gray-600 hover:border-blue-300'}`}>
                         {bVal} {!isPrimaryA && <span className="opacity-60">(primary)</span>}
                       </button>
                     </div>
@@ -284,32 +315,24 @@ function PairRow({ pair, onDismiss }: { pair: DupePair; onDismiss: () => void })
             </div>
           )}
 
-          {/* Auto-merge summary */}
           <div className="bg-white rounded-lg border border-gray-200 p-3 text-xs text-gray-500 space-y-1">
             <p className="font-medium text-gray-600 mb-1">Automatically handled on merge:</p>
-            <p>· All role flags are OR'd — no flag will be lost</p>
-            <p>· Tags are combined into one set</p>
-            <p>· Earliest date-added is kept</p>
-            <p>· All actions and interactions move to the primary record</p>
-            {hasDifferentEmails && (
-              <p>· <span className="font-medium text-gray-700">{secondary.email}</span> saved to alternative emails</p>
-            )}
+            <p>· All role flags OR'd — no flag lost</p>
+            <p>· Tags combined into one set</p>
+            <p>· Earliest date-added kept</p>
+            <p>· All actions and interactions move to primary record</p>
+            {hasDifferentEmails && <p>· <span className="font-medium text-gray-700">{secondary.email}</span> saved to alternative emails</p>}
           </div>
 
           {error && <p className="text-red-600 text-sm bg-red-50 rounded p-2">{error}</p>}
 
           <div className="flex gap-3">
-            <button
-              onClick={handleMerge}
-              disabled={merging}
-              className="bg-blue-600 text-white px-4 py-2 rounded-lg font-medium hover:bg-blue-700 disabled:opacity-50 transition-colors text-sm"
-            >
+            <button onClick={handleMerge} disabled={merging}
+              className="bg-blue-600 text-white px-4 py-2 rounded-lg font-medium hover:bg-blue-700 disabled:opacity-50 text-sm">
               {merging ? 'Merging…' : `Merge — keep ${primary.full_name || primary.email || 'primary'}`}
             </button>
-            <button
-              onClick={onDismiss}
-              className="px-4 py-2 rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-50 transition-colors text-sm"
-            >
+            <button onClick={() => onDismiss(pair.key)}
+              className="px-4 py-2 rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-50 text-sm">
               Not duplicates
             </button>
           </div>
@@ -319,12 +342,26 @@ function PairRow({ pair, onDismiss }: { pair: DupePair; onDismiss: () => void })
   )
 }
 
-export default function MergeWizard({ pairs: initialPairs }: { pairs: DupePair[] }) {
-  const [pairs, setPairs] = useState(initialPairs)
+export default function MergeWizard() {
+  const [pairs, setPairs] = useState<DupePair[]>([])
+  const [loading, setLoading] = useState(true)
   const [mergedCount, setMergedCount] = useState(0)
 
-  function dismiss(key: string) {
-    setPairs(prev => prev.filter(p => p.key !== key))
+  const load = useCallback(async () => {
+    setLoading(true)
+    const contacts = await fetchAllContacts()
+    setPairs(computePairs(contacts))
+    setLoading(false)
+  }, [])
+
+  useEffect(() => { load() }, [load])
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center py-32 text-gray-400 text-sm">
+        Loading contacts…
+      </div>
+    )
   }
 
   return (
@@ -337,7 +374,10 @@ export default function MergeWizard({ pairs: initialPairs }: { pairs: DupePair[]
             {mergedCount > 0 && ` · ${mergedCount} merged this session`}
           </p>
         </div>
-        <Link href="/contacts" className="text-gray-500 hover:text-gray-900 text-sm">← Contacts</Link>
+        <div className="flex items-center gap-4">
+          <button onClick={load} className="text-xs text-gray-400 hover:text-gray-600">↺ Refresh</button>
+          <Link href="/contacts" className="text-gray-500 hover:text-gray-900 text-sm">← Contacts</Link>
+        </div>
       </div>
 
       {pairs.length === 0 ? (
@@ -347,15 +387,13 @@ export default function MergeWizard({ pairs: initialPairs }: { pairs: DupePair[]
         </div>
       ) : (
         <div className="space-y-2">
-          <p className="text-xs text-gray-400">Click <strong>Review</strong> on any row to compare and merge, or <strong>Not duplicates</strong> to dismiss.</p>
+          <p className="text-xs text-gray-400">Click <strong>Review</strong> on any row to compare. Use <strong>↺ Refresh</strong> to reload from the database.</p>
           {pairs.map(pair => (
             <PairRow
               key={pair.key}
               pair={pair}
-              onDismiss={() => {
-                dismiss(pair.key)
-                setMergedCount(n => n) // no increment for dismissals
-              }}
+              onDismiss={(key) => setPairs(prev => prev.filter(p => p.key !== key))}
+              onMerged={(key) => { setPairs(prev => prev.filter(p => p.key !== key)); setMergedCount(n => n + 1) }}
             />
           ))}
         </div>
