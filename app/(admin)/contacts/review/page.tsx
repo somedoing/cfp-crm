@@ -23,13 +23,17 @@ async function fetchAll(supabase: Awaited<ReturnType<typeof createClient>>) {
 export default async function ReviewPage() {
   const supabase = await createClient()
 
-  const [contacts, { data: openActions }] = await Promise.all([
+  const [contacts, { data: openActions }, { data: profiles }] = await Promise.all([
     fetchAll(supabase),
     supabase
       .from('actions')
       .select('contact_id')
       .not('status', 'in', '("Done","Committed","Declined","Unresponsive","Dropped","Skipped")')
       .not('contact_id', 'is', null),
+    supabase
+      .from('profiles')
+      .select('id, full_name')
+      .order('full_name'),
   ])
 
   const openContactIds = [...new Set(openActions?.map((a: any) => a.contact_id) ?? [])]
@@ -38,6 +42,7 @@ export default async function ReviewPage() {
     <ReviewWizard
       contacts={contacts as any}
       initialPipelineIds={openContactIds}
+      users={(profiles ?? []) as any}
     />
   )
 }

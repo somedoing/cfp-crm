@@ -79,17 +79,22 @@ function actionParams(contact: ReviewContact) {
 
 // ─── Main wizard ──────────────────────────────────────────────────────────────
 
+type User = { id: string; full_name: string }
+
 export default function ReviewWizard({
   contacts: initialContacts,
   initialPipelineIds,
+  users = [],
 }: {
   contacts: ReviewContact[]
   initialPipelineIds: string[]
+  users?: User[]
 }) {
   const supabase = createClient()
   const [contacts, setContacts] = useState(initialContacts)
   const [index, setIndex] = useState(0)
   const [pipelineIds, setPipelineIds] = useState(() => new Set(initialPipelineIds))
+  const [assignUserId, setAssignUserId] = useState<string>('')
   const cardRef = useRef<{ saveAll: () => Promise<void> } | null>(null)
 
   // Queue: unreviewed (newest first) then reviewed (oldest reviewed first)
@@ -125,7 +130,15 @@ export default function ReviewWizard({
     if (cardRef.current) await cardRef.current.saveAll()
     if (!pipelineIds.has(contact.id)) {
       setPipelineIds(prev => new Set([...prev, contact.id]))
-      await supabase.from('actions').insert(actionParams(contact))
+      const params: Record<string, any> = {
+        ...actionParams(contact),
+        ...(assignUserId ? {
+          assigned_user_id: assignUserId,
+          assigned_to: 'sender',
+          status: 'To Contact',
+        } : {}),
+      }
+      await supabase.from('actions').insert(params)
     }
     const ts = new Date().toISOString()
     await supabase.from('contacts').update({ reviewed_at: ts }).eq('id', contact.id)
@@ -233,28 +246,21 @@ export default function ReviewWizard({
                   {index + 1} / {queue.length.toLocaleString()}
                 </span>
                 <div className="flex items-center gap-2">
-                  <button
-                    onClick={goBack}
-                    disabled={index === 0}
-                    className="text-gray-400 hover:text-gray-600 text-sm px-2 py-1 disabled:opacity-30"
-                  >
-                    ←
-                  </button>
-                  <button
-                    onClick={skip}
-                    className="text-gray-400 hover:text-gray-600 text-sm px-2 py-1"
-                  >
-                    →
-                  </button>
-                  <Link
-                    href={`/contacts/${contact.id}`}
-                    target="_blank"
-                    className="text-gray-400 hover:text-gray-600 text-sm px-2 py-1"
-                  >
-                    ↗
-                  </Link>
+                  <button onClick={goBack} disabled={index === 0} className="text-gray-400 hover:text-gray-600 text-sm px-2 py-1 disabled:opacity-30">←</button>
+                  <button onClick={skip} className="text-gray-400 hover:text-gray-600 text-sm px-2 py-1">→</button>
+                  <Link href={`/contacts/${contact.id}`} target="_blank" className="text-gray-400 hover:text-gray-600 text-sm px-2 py-1">↗</Link>
                 </div>
               </div>
+              {users.length > 0 && (
+                <select
+                  value={assignUserId}
+                  onChange={e => setAssignUserId(e.target.value)}
+                  className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2 mb-2 text-gray-600 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                >
+                  <option value="">Assign to… (optional)</option>
+                  {users.map(u => <option key={u.id} value={u.id}>{u.full_name}</option>)}
+                </select>
+              )}
               <div className="grid grid-cols-2 gap-2">
                 {pipelineIds.has(contact.id) ? (
                   <div className="col-span-2 flex items-center gap-2 px-3 py-2 bg-green-50 rounded-lg border border-green-200">
@@ -262,7 +268,7 @@ export default function ReviewWizard({
                   </div>
                 ) : (
                   <Button size="sm" className="col-span-2 bg-blue-600 hover:bg-blue-700" onClick={addToPipeline}>
-                    + Add to pipeline
+                    + Add to pipeline{assignUserId ? ` → ${users.find(u => u.id === assignUserId)?.full_name}` : ''}
                   </Button>
                 )}
                 <Button size="sm" variant="outline" className="border-green-200 text-green-700 hover:bg-green-50 text-xs" onClick={markReviewed}>
@@ -281,13 +287,24 @@ export default function ReviewWizard({
                 {isReviewedSection && <span className="ml-2 text-green-500">· Reviewed</span>}
               </p>
 
+              {users.length > 0 && (
+                <select
+                  value={assignUserId}
+                  onChange={e => setAssignUserId(e.target.value)}
+                  className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2 text-gray-600 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                >
+                  <option value="">Assign to… (optional)</option>
+                  {users.map(u => <option key={u.id} value={u.id}>{u.full_name}</option>)}
+                </select>
+              )}
+
               {pipelineIds.has(contact.id) ? (
                 <div className="flex items-center gap-2 px-3 py-2 bg-green-50 rounded-lg border border-green-200">
                   <span className="text-green-700 text-sm font-medium">✓ In pipeline</span>
                 </div>
               ) : (
                 <Button className="w-full justify-start bg-blue-600 hover:bg-blue-700" onClick={addToPipeline}>
-                  + Add to pipeline
+                  + Add to pipeline{assignUserId ? ` → ${users.find(u => u.id === assignUserId)?.full_name}` : ''}
                 </Button>
               )}
 
