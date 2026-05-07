@@ -53,6 +53,14 @@ export async function mergeContacts({
   if (deleteErr) return { error: `Failed to delete duplicate: ${deleteErr.message}` }
   if (count === 0) return { error: `Delete matched 0 rows — contact ${secondaryId} may already be deleted or a trigger is blocking it` }
 
+  // Verify the contact is actually gone
+  const { data: stillExists } = await admin
+    .from('contacts')
+    .select('id')
+    .eq('id', secondaryId)
+    .maybeSingle()
+  if (stillExists) return { error: `Contact ${secondaryId} still exists after delete — a database trigger may be blocking deletion` }
+
   revalidatePath('/contacts')
   revalidatePath('/contacts/merge')
   return { success: true }
