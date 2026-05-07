@@ -7,8 +7,8 @@ export default async function ActionsPage() {
   const [{ data: actions }, { data: profiles }] = await Promise.all([
     supabase
       .from('actions')
-      .select('id, title, priority, action_type, action_area, assigned_to, assigned_user_id, assigned_user:profiles!assigned_user_id(full_name), status, due_date, sent_at, updated_at, contact:contacts(id, full_name, email, date_added), org:organizations(id, name, org_type)')
-      .order('created_at', { ascending: false })
+      .select('id, title, priority, action_type, action_area, assigned_to, assigned_user_id, status, due_date, sent_at, updated_at, contact:contacts(id, full_name, email, date_added), org:organizations(id, name, org_type)')
+      .order('updated_at', { ascending: false })
       .limit(500),
     supabase
       .from('profiles')

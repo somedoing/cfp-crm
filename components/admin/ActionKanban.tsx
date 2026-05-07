@@ -42,7 +42,6 @@ type Action = {
   action_area: string
   assigned_to: string
   assigned_user_id: string | null
-  assigned_user: { full_name: string } | null
   status: string
   due_date: string | null
   sent_at: string | null
@@ -116,8 +115,7 @@ export default function ActionKanban({
   }
 
   async function assignUser(actionId: string, userId: string | null) {
-    const user = userId ? (users.find(u => u.id === userId) ?? null) : null
-    patch(actionId, { assigned_user_id: userId, assigned_user: user ? { full_name: user.full_name } : null })
+    patch(actionId, { assigned_user_id: userId })
     await supabase.from('actions').update({ assigned_user_id: userId }).eq('id', actionId)
   }
 
