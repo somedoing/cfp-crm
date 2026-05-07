@@ -35,16 +35,36 @@ export default async function MergePage() {
     emailGroups.get(key)!.push(c)
   }
 
+  // Name duplicates
+  const nameGroups = new Map<string, any[]>()
+  for (const c of contacts) {
+    const first = (c.first_name ?? '').toLowerCase().trim()
+    const last = (c.last_name ?? '').toLowerCase().trim()
+    if (!first || !last) continue
+    const key = `${first}|${last}`
+    if (!nameGroups.has(key)) nameGroups.set(key, [])
+    nameGroups.get(key)!.push(c)
+  }
+
+  const seenPairs = new Set<string>()
   const pairs: any[] = []
-  for (const group of emailGroups.values()) {
-    if (group.length < 2) continue
-    for (let i = 0; i < group.length; i++) {
-      for (let j = i + 1; j < group.length; j++) {
-        const pairKey = [group[i].id, group[j].id].sort().join('|')
-        pairs.push({ key: pairKey, reason: 'email', a: group[i], b: group[j] })
+
+  function addPairs(groups: Map<string, any[]>, reason: string) {
+    for (const group of groups.values()) {
+      if (group.length < 2) continue
+      for (let i = 0; i < group.length; i++) {
+        for (let j = i + 1; j < group.length; j++) {
+          const pairKey = [group[i].id, group[j].id].sort().join('|')
+          if (seenPairs.has(pairKey)) continue
+          seenPairs.add(pairKey)
+          pairs.push({ key: pairKey, reason, a: group[i], b: group[j] })
+        }
       }
     }
   }
+
+  addPairs(emailGroups, 'email')
+  addPairs(nameGroups, 'name')
 
   return <MergeWizard pairs={pairs as any} />
 }
