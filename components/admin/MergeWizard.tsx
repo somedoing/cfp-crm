@@ -150,9 +150,16 @@ function PairRow({ pair, onDismiss }: { pair: DupePair; onDismiss: () => void })
     mergedData.alternative_emails = [...new Set(altEmails.filter(Boolean))]
     mergedData.email = primary.email
 
-    const result = await mergeContacts({ primaryId: primary.id, secondaryId: secondary.id, mergedData })
+    let result: { error?: string; success?: boolean }
+    try {
+      result = await mergeContacts({ primaryId: primary.id, secondaryId: secondary.id, mergedData })
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e))
+      setMerging(false)
+      return
+    }
 
-    if ('error' in result && result.error) {
+    if (result.error) {
       setError(result.error)
       setMerging(false)
       return
