@@ -8,15 +8,21 @@ const FIELDS = 'id, display_id, first_name, last_name, full_name, email, alterna
 export async function fetchDuplicatePairs() {
   const admin = createAdminClient()
 
-  // Fetch all contacts — admin client bypasses RLS, range covers up to 50k
-  const { data: contacts, error } = await admin
-    .from('contacts')
-    .select(FIELDS)
-    .order('id', { ascending: true })
-    .range(0, 9999)
-
-  if (error) return { error: error.message, pairs: [], contactCount: 0 }
-  if (!contacts) return { pairs: [], contactCount: 0 }
+  // Paginate through all contacts — Supabase caps each response at 1000 rows
+  const contacts: any[] = []
+  let page = 0
+  while (true) {
+    const { data, error } = await admin
+      .from('contacts')
+      .select(FIELDS)
+      .order('id', { ascending: true })
+      .range(page * 1000, (page + 1) * 1000 - 1)
+    if (error) return { error: error.message, pairs: [], contactCount: 0 }
+    if (!data || data.length === 0) break
+    contacts.push(...data)
+    if (data.length < 1000) break
+    page++
+  }
 
   // Email duplicates
   const emailGroups = new Map<string, any[]>()
