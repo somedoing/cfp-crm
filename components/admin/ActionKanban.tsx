@@ -10,7 +10,7 @@ const PRIORITY_ORDER: Record<string, number> = { High: 0, Medium: 1, Low: 2 }
 const CLOSED_STATUSES = ['Done', 'Committed', 'Declined', 'Unresponsive', 'Dropped', 'Skipped']
 const OUTCOMES = ['Committed', 'Declined', 'Unresponsive', 'Done']
 
-type ColKey = 'needs-review' | 'ready' | 'jon' | 'contacted' | 'followup' | 'positive' | 'closed'
+type ColKey = 'needs-review' | 'ready' | 'queued' | 'contacted' | 'followup' | 'positive' | 'closed'
 
 const COLUMNS: {
   key: ColKey
@@ -20,14 +20,16 @@ const COLUMNS: {
   statusSet: string | null
   assignedTo: string | null
 }[] = [
-  { key: 'needs-review', label: 'Needs Review',       color: 'bg-gray-100',    hoverColor: 'ring-gray-300',   statusSet: 'Needs Review',      assignedTo: 'admin'     },
-  { key: 'ready',        label: 'Ready to Contact',   color: 'bg-blue-50',     hoverColor: 'ring-blue-300',   statusSet: 'Ready to Contact',  assignedTo: 'admin'     },
-  { key: 'jon',          label: "Jon's Queue",         color: 'bg-purple-50',   hoverColor: 'ring-purple-300', statusSet: 'Assigned to Jon',   assignedTo: 'candidate' },
-  { key: 'contacted',    label: 'Contacted, Waiting', color: 'bg-yellow-50',   hoverColor: 'ring-yellow-300', statusSet: 'Contacted',         assignedTo: 'admin'     },
-  { key: 'followup',     label: 'Follow Up Needed',   color: 'bg-orange-50',   hoverColor: 'ring-orange-300', statusSet: 'Follow-up',         assignedTo: 'admin'     },
-  { key: 'positive',     label: 'Positive Response',  color: 'bg-green-50',    hoverColor: 'ring-green-300',  statusSet: 'Positive Response', assignedTo: 'admin'     },
-  { key: 'closed',       label: 'Closed',             color: 'bg-gray-50',     hoverColor: 'ring-gray-200',   statusSet: null,                assignedTo: null        },
+  { key: 'needs-review', label: 'Needs Review',       color: 'bg-gray-100',    hoverColor: 'ring-gray-300',   statusSet: 'Needs Review',       assignedTo: 'admin'     },
+  { key: 'ready',        label: 'Ready to Contact',   color: 'bg-blue-50',     hoverColor: 'ring-blue-300',   statusSet: 'Ready to Contact',   assignedTo: 'admin'     },
+  { key: 'queued',       label: 'Waiting to Contact', color: 'bg-purple-50',   hoverColor: 'ring-purple-300', statusSet: 'Waiting to contact', assignedTo: 'candidate' },
+  { key: 'contacted',    label: 'Contacted, Waiting', color: 'bg-yellow-50',   hoverColor: 'ring-yellow-300', statusSet: 'Contacted',          assignedTo: 'admin'     },
+  { key: 'followup',     label: 'Follow Up Needed',   color: 'bg-orange-50',   hoverColor: 'ring-orange-300', statusSet: 'Follow-up',          assignedTo: 'admin'     },
+  { key: 'positive',     label: 'Positive Response',  color: 'bg-green-50',    hoverColor: 'ring-green-300',  statusSet: 'Positive Response',  assignedTo: 'admin'     },
+  { key: 'closed',       label: 'Closed',             color: 'bg-gray-50',     hoverColor: 'ring-gray-200',   statusSet: null,                 assignedTo: null        },
 ]
+
+type User = { id: string; full_name: string }
 
 type Action = {
   id: string
@@ -36,6 +38,8 @@ type Action = {
   action_type: string
   action_area: string
   assigned_to: string
+  assigned_user_id: string | null
+  assigned_user: { full_name: string } | null
   status: string
   due_date: string | null
   sent_at: string | null
@@ -48,14 +52,20 @@ function getColKey(action: Action): ColKey {
   const s = action.status
   if (CLOSED_STATUSES.includes(s)) return 'closed'
   if (s === 'Needs Review') return 'needs-review'
-  if (s === 'Assigned to Jon') return 'jon'
+  if (s === 'Waiting to contact' || s === 'Assigned to Jon') return 'queued'
   if (s === 'Contacted' || s === 'Waiting on response') return 'contacted'
   if (s === 'Follow-up') return 'followup'
   if (s === 'Positive Response' || s === 'Responded') return 'positive'
-  return 'ready' // Not started, Ready to Contact, In progress
+  return 'ready'
 }
 
-export default function ActionKanban({ initialActions }: { initialActions: Action[] }) {
+export default function ActionKanban({
+  initialActions,
+  users,
+}: {
+  initialActions: Action[]
+  users: User[]
+}) {
   const supabase = createClient()
   const [actions, setActions] = useState<Action[]>(initialActions)
   const [closingId, setClosingId] = useState<string | null>(null)
@@ -86,15 +96,23 @@ export default function ActionKanban({ initialActions }: { initialActions: Actio
     if (!col?.statusSet) return
 
     const ts = new Date().toISOString()
-    const updates: Record<string, string> = {
+    const updates: Record<string, any> = {
       status: col.statusSet,
       assigned_to: col.assignedTo ?? 'admin',
       updated_at: ts,
     }
     if (col.key === 'contacted' || col.key === 'followup') updates.sent_at = ts
+    // When moving OUT of the queued column, clear the assigned user
+    if (col.key !== 'queued') updates.assigned_user_id = null
 
     patch(actionId, updates as any)
     await supabase.from('actions').update(updates).eq('id', actionId)
+  }
+
+  async function assignUser(actionId: string, userId: string | null) {
+    const user = userId ? (users.find(u => u.id === userId) ?? null) : null
+    patch(actionId, { assigned_user_id: userId, assigned_user: user ? { full_name: user.full_name } : null })
+    await supabase.from('actions').update({ assigned_user_id: userId }).eq('id', actionId)
   }
 
   async function clearPipeline() {
@@ -184,6 +202,8 @@ export default function ActionKanban({ initialActions }: { initialActions: Actio
                               colKey={col.key}
                               isDragging={snapshot.isDragging}
                               isClosing={closingId === action.id}
+                              users={col.key === 'queued' ? users : []}
+                              onAssign={userId => assignUser(action.id, userId)}
                               onClose={outcome => closeAction(action.id, outcome)}
                               onStartClose={() => setClosingId(action.id)}
                               onCancelClose={() => setClosingId(null)}
@@ -209,6 +229,8 @@ function ActionCard({
   colKey,
   isDragging,
   isClosing,
+  users,
+  onAssign,
   onClose,
   onStartClose,
   onCancelClose,
@@ -217,6 +239,8 @@ function ActionCard({
   colKey: ColKey
   isDragging: boolean
   isClosing: boolean
+  users: User[]
+  onAssign: (userId: string | null) => void
   onClose: (outcome: string) => void
   onStartClose: () => void
   onCancelClose: () => void
@@ -284,6 +308,23 @@ function ActionCard({
           )}
         </div>
       </div>
+
+      {/* Assign to user — shown only in the "Waiting to contact" column */}
+      {colKey === 'queued' && users.length > 0 && (
+        <div className="border-t pt-1.5">
+          <select
+            value={action.assigned_user_id ?? ''}
+            onChange={e => onAssign(e.target.value || null)}
+            onClick={e => e.stopPropagation()}
+            className="w-full text-xs border border-gray-200 rounded px-2 py-1 text-gray-600 bg-white focus:outline-none focus:ring-1 focus:ring-purple-400"
+          >
+            <option value="">— Unassigned —</option>
+            {users.map(u => (
+              <option key={u.id} value={u.id}>{u.full_name}</option>
+            ))}
+          </select>
+        </div>
+      )}
 
       {/* Outcome picker */}
       {isClosing && (

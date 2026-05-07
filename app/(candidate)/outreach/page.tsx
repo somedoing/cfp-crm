@@ -4,11 +4,13 @@ import OutreachCard from '@/components/candidate/OutreachCard'
 export default async function OutreachPage() {
   const supabase = await createClient()
 
+  const { data: { user } } = await supabase.auth.getUser()
+
   const { data: actions } = await supabase
     .from('actions')
     .select('*, contact:contacts(full_name, display_id, email, phone, last_contact_summary, notes)')
-    .eq('assigned_to', 'candidate')
-    .not('status', 'in', '("Done","Dropped","Skipped")')
+    .eq('assigned_user_id', user?.id ?? '')
+    .not('status', 'in', '("Done","Dropped","Skipped","Committed","Declined","Unresponsive")')
     .order('priority', { ascending: true })
     .order('due_date', { ascending: true })
 
