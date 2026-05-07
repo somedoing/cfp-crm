@@ -55,7 +55,7 @@ function getColKey(action: Action): ColKey {
   if (s === 'Contacted' || s === 'Waiting on response') return 'contacted'
   if (s === 'Follow-up') return 'followup'
   if (s === 'Positive Response' || s === 'Responded') return 'positive'
-  return 'ready'
+  return 'queued'
 }
 
 export default function ActionKanban({
