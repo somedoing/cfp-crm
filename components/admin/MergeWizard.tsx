@@ -2,10 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import Link from 'next/link'
-import { createClient } from '@/lib/supabase/client'
-import { mergeContacts } from '@/app/(admin)/contacts/merge/actions'
-
-const FIELDS = 'id, display_id, first_name, last_name, full_name, email, alternative_emails, phone, town, state, zip, county, source, original_source_form, notes, date_added, is_volunteer, is_active_volunteer, is_donor, is_signature_collector, is_supporter, is_media_contact, is_press_contact, is_coalition_contact, is_candidate_partner, newsletter_subscriber, email_opt_in, text_opt_in, in_discord, discord_username, volunteer_stage, donor_stage, signature_stage, priority, tags, do_not_contact'
+import { mergeContacts, fetchDuplicatePairs } from '@/app/(admin)/contacts/merge/actions'
 
 type Contact = {
   id: string
@@ -74,56 +71,6 @@ const BOOL_FLAGS: (keyof Contact)[] = [
   'in_discord', 'do_not_contact',
 ]
 
-async function fetchAllContacts(): Promise<Contact[]> {
-  const supabase = createClient()
-  const { data } = await supabase
-    .from('contacts')
-    .select(FIELDS)
-    .order('id', { ascending: true })
-    .range(0, 9999)
-  return (data as Contact[]) ?? []
-}
-
-function computePairs(contacts: Contact[]): DupePair[] {
-  const emailGroups = new Map<string, Contact[]>()
-  for (const c of contacts) {
-    if (!c.email?.trim()) continue
-    const key = c.email.toLowerCase().trim()
-    if (!emailGroups.has(key)) emailGroups.set(key, [])
-    emailGroups.get(key)!.push(c)
-  }
-
-  const nameGroups = new Map<string, Contact[]>()
-  for (const c of contacts) {
-    const first = (c.first_name ?? '').toLowerCase().trim()
-    const last = (c.last_name ?? '').toLowerCase().trim()
-    if (!first || !last) continue
-    const key = `${first}|${last}`
-    if (!nameGroups.has(key)) nameGroups.set(key, [])
-    nameGroups.get(key)!.push(c)
-  }
-
-  const seenPairs = new Set<string>()
-  const pairs: DupePair[] = []
-
-  function addPairs(groups: Map<string, Contact[]>, reason: 'email' | 'name') {
-    for (const group of groups.values()) {
-      if (group.length < 2) continue
-      for (let i = 0; i < group.length; i++) {
-        for (let j = i + 1; j < group.length; j++) {
-          const pairKey = [group[i].id, group[j].id].sort().join('|')
-          if (seenPairs.has(pairKey)) continue
-          seenPairs.add(pairKey)
-          pairs.push({ key: pairKey, reason, a: group[i], b: group[j] })
-        }
-      }
-    }
-  }
-
-  addPairs(emailGroups, 'email')
-  addPairs(nameGroups, 'name')
-  return pairs
-}
 
 function defaultChoices(a: Contact, b: Contact): Record<string, 'a' | 'b'> {
   const choices: Record<string, 'a' | 'b'> = {}
@@ -343,8 +290,8 @@ export default function MergeWizard() {
 
   const load = useCallback(async () => {
     setLoading(true)
-    const contacts = await fetchAllContacts()
-    setPairs(computePairs(contacts))
+    const result = await fetchDuplicatePairs()
+    setPairs((result.pairs ?? []) as DupePair[])
     setLoading(false)
   }, [])
 
