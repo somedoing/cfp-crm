@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -110,6 +111,7 @@ export default function ContactDetail({
   interactions: Interaction[]
 }) {
   const supabase = createClient()
+  const router = useRouter()
 
   // Basic info (editable)
   const [firstName, setFirstName] = useState(initial.first_name ?? '')
@@ -207,6 +209,17 @@ export default function ContactDetail({
     setIntNotes('')
     setIntDate(today)
     setAddingInt(false)
+  }
+
+  const [confirmDelete, setConfirmDelete] = useState(false)
+  const [deleting, setDeleting] = useState(false)
+
+  async function handleDelete() {
+    setDeleting(true)
+    await supabase.from('interactions').delete().eq('contact_id', initial.id)
+    await supabase.from('actions').delete().eq('contact_id', initial.id)
+    await supabase.from('contacts').delete().eq('id', initial.id)
+    router.push('/contacts')
   }
 
   const openActions = actions.filter(a => !CLOSED_STATUSES.includes(a.status))
@@ -478,6 +491,47 @@ export default function ContactDetail({
             </div>
           </details>
         )}
+      </div>
+
+      {/* Danger zone */}
+      <div className="border border-gray-200 rounded-xl p-4">
+        <p className="text-xs text-gray-400 font-medium uppercase tracking-wide mb-3">Danger zone</p>
+        <div className="flex items-center gap-4 flex-wrap">
+          <Link
+            href={`/contacts/${initial.id}/merge`}
+            className="text-gray-500 hover:text-gray-800 text-sm border border-gray-200 rounded-lg px-3 py-1.5 hover:border-gray-300 transition-colors"
+          >
+            Merge with duplicate…
+          </Link>
+
+          {!confirmDelete ? (
+            <button
+              onClick={() => setConfirmDelete(true)}
+              className="text-red-400 hover:text-red-600 text-sm border border-red-100 hover:border-red-300 rounded-lg px-3 py-1.5 transition-colors"
+            >
+              Delete contact
+            </button>
+          ) : (
+            <div className="flex items-center gap-3 bg-red-50 border border-red-200 rounded-lg px-3 py-2">
+              <span className="text-red-700 text-sm">
+                Delete {displayName} and all their actions/interactions?
+              </span>
+              <button
+                onClick={handleDelete}
+                disabled={deleting}
+                className="bg-red-600 text-white rounded px-3 py-1 text-sm hover:bg-red-700 disabled:opacity-50"
+              >
+                {deleting ? 'Deleting…' : 'Yes, delete'}
+              </button>
+              <button
+                onClick={() => setConfirmDelete(false)}
+                className="text-gray-500 hover:text-gray-700 text-sm"
+              >
+                Cancel
+              </button>
+            </div>
+          )}
+        </div>
       </div>
     </div>
   )
