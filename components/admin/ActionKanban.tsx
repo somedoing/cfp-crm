@@ -8,9 +8,10 @@ import Link from 'next/link'
 
 const PRIORITY_ORDER: Record<string, number> = { High: 0, Medium: 1, Low: 2 }
 const CLOSED_STATUSES = ['Done', 'Committed', 'Declined', 'Unresponsive', 'Dropped', 'Skipped']
+const ENGAGEMENT_STATUSES = ['Supporter', 'Active', 'Core']
 const OUTCOMES = ['Committed', 'Declined', 'Unresponsive', 'Done']
 
-type ColKey = 'needs-review' | 'queued' | 'contacted' | 'followup' | 'positive' | 'closed'
+type ColKey = 'needs-review' | 'queued' | 'contacted' | 'followup' | 'positive' | 'supporter' | 'active' | 'core' | 'closed'
 
 const COLUMNS: {
   key: ColKey
@@ -25,6 +26,9 @@ const COLUMNS: {
   { key: 'contacted',    label: 'Contacted, Waiting', color: 'bg-yellow-50',   hoverColor: 'ring-yellow-300', statusSet: 'Contacted',     assignedTo: 'admin'     },
   { key: 'followup',     label: 'Follow Up Needed',   color: 'bg-orange-50',   hoverColor: 'ring-orange-300', statusSet: 'Follow-up',     assignedTo: 'admin'     },
   { key: 'positive',     label: 'Positive Response',  color: 'bg-green-50',    hoverColor: 'ring-green-300',  statusSet: 'Positive Response', assignedTo: 'admin' },
+  { key: 'supporter',    label: 'Supporter',          color: 'bg-teal-50',     hoverColor: 'ring-teal-300',   statusSet: 'Supporter',     assignedTo: 'admin'     },
+  { key: 'active',       label: 'Active',             color: 'bg-indigo-50',   hoverColor: 'ring-indigo-300', statusSet: 'Active',        assignedTo: 'admin'     },
+  { key: 'core',         label: 'Core',               color: 'bg-amber-50',    hoverColor: 'ring-amber-300',  statusSet: 'Core',          assignedTo: 'admin'     },
   { key: 'closed',       label: 'Closed',             color: 'bg-gray-50',     hoverColor: 'ring-gray-200',   statusSet: null,            assignedTo: null        },
 ]
 
@@ -55,6 +59,9 @@ function getColKey(action: Action): ColKey {
   if (s === 'Contacted' || s === 'Waiting on response') return 'contacted'
   if (s === 'Follow-up') return 'followup'
   if (s === 'Positive Response' || s === 'Responded') return 'positive'
+  if (s === 'Supporter') return 'supporter'
+  if (s === 'Active') return 'active'
+  if (s === 'Core') return 'core'
   return 'queued'
 }
 
@@ -119,8 +126,8 @@ export default function ActionKanban({
     await supabase
       .from('actions')
       .delete()
-      .not('status', 'in', '("Done","Committed","Declined","Unresponsive","Dropped","Skipped")')
-    setActions(prev => prev.filter(a => CLOSED_STATUSES.includes(a.status)))
+      .not('status', 'in', '("Done","Committed","Declined","Unresponsive","Dropped","Skipped","Supporter","Active","Core")')
+    setActions(prev => prev.filter(a => CLOSED_STATUSES.includes(a.status) || ENGAGEMENT_STATUSES.includes(a.status)))
     setConfirmClear(false)
     setClearing(false)
   }
@@ -133,7 +140,7 @@ export default function ActionKanban({
     setClosingId(null)
   }
 
-  const openCount = actions.filter(a => !CLOSED_STATUSES.includes(a.status)).length
+  const openCount = actions.filter(a => !CLOSED_STATUSES.includes(a.status) && !ENGAGEMENT_STATUSES.includes(a.status)).length
 
   return (
     <DragDropContext onDragEnd={onDragEnd}>

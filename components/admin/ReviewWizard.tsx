@@ -13,6 +13,17 @@ const VOLUNTEER_STAGES = ['New','Contacted','Interested','Asked','Assigned','Act
 const DONOR_STAGES = ['Prospect','Not asked','Asked','Pledged','Donated','Thanked','Recurring','Lapsed','Do not solicit']
 const PRIORITIES = ['High', 'Medium', 'Low']
 
+type TaskTemplate = {
+  id: string
+  title: string
+  description: string | null
+  suggested_ask: string | null
+  suggested_message: string | null
+  action_type: string
+  action_area: string | null
+  priority: string
+}
+
 type ReviewContact = {
   id: string
   display_id: string | null
@@ -85,16 +96,19 @@ export default function ReviewWizard({
   contacts: initialContacts,
   initialPipelineIds,
   users = [],
+  templates = [],
 }: {
   contacts: ReviewContact[]
   initialPipelineIds: string[]
   users?: User[]
+  templates?: TaskTemplate[]
 }) {
   const supabase = createClient()
   const [contacts, setContacts] = useState(initialContacts)
   const [index, setIndex] = useState(0)
   const [pipelineIds, setPipelineIds] = useState(() => new Set(initialPipelineIds))
   const [assignUserId, setAssignUserId] = useState<string>('')
+  const [templateId, setTemplateId] = useState<string>('')
   const cardRef = useRef<{ saveAll: () => Promise<void> } | null>(null)
 
   // Queue: unreviewed (newest first) then reviewed (oldest reviewed first)
@@ -130,16 +144,44 @@ export default function ReviewWizard({
     if (cardRef.current) await cardRef.current.saveAll()
     if (!pipelineIds.has(contact.id)) {
       setPipelineIds(prev => new Set([...prev, contact.id]))
-      const params: Record<string, any> = {
-        ...actionParams(contact),
-        ...(assignUserId ? {
-          assigned_user_id: assignUserId,
-          assigned_to: 'sender',
-          status: 'To Contact',
-        } : {}),
-      }
-      await supabase.from('actions').insert(params)
+      const base = actionParams(contact)
+      const senderOverrides = assignUserId ? {
+        assigned_user_id: assignUserId,
+        assigned_to: 'sender',
+        status: 'To Contact',
+      } : {}
+      const tpl = templates.find(t => t.id === templateId)
+      const templateOverrides = tpl ? {
+        title: `${contact.first_name ?? contact.full_name.split(' ')[0] ?? 'Contact'} — ${tpl.title}`,
+        action_type: tpl.action_type,
+        priority: tpl.priority,
+        action_area: tpl.action_area ?? base.action_area,
+        suggested_ask: tpl.suggested_ask ?? null,
+        suggested_message: tpl.suggested_message ?? null,
+        template_id: tpl.id,
+      } : {}
+      await supabase.from('actions').insert({ ...base, ...senderOverrides, ...templateOverrides })
     }
+    const ts = new Date().toISOString()
+    await supabase.from('contacts').update({ reviewed_at: ts }).eq('id', contact.id)
+    updateContact(contact.id, { reviewed_at: ts })
+  }
+
+  async function addToBullseye(tier: 'Supporter' | 'Active' | 'Core') {
+    if (!contact) return
+    if (cardRef.current) await cardRef.current.saveAll()
+    const priorityMap: Record<string, string> = { Core: 'High', Active: 'Medium', Supporter: 'Low' }
+    await supabase.from('actions').insert({
+      contact_id: contact.id,
+      title: `${contact.first_name ?? contact.full_name.split(' ')[0] ?? contact.email} — ${tier}`,
+      action_type: 'Check in',
+      action_area: 'General Supporter Follow-Up',
+      assigned_to: 'admin',
+      status: tier,
+      priority: priorityMap[tier],
+      due_date: new Date().toISOString().split('T')[0],
+    })
+    setPipelineIds(prev => new Set([...prev, contact.id]))
     const ts = new Date().toISOString()
     await supabase.from('contacts').update({ reviewed_at: ts }).eq('id', contact.id)
     updateContact(contact.id, { reviewed_at: ts })
@@ -240,8 +282,8 @@ export default function ReviewWizard({
           {/* Action panel — sidebar on desktop, stacked below on mobile */}
           <div className="lg:col-span-2 lg:sticky lg:top-4">
             {/* Mobile: compact horizontal action bar */}
-            <div className="lg:hidden bg-white rounded-xl border border-gray-200 p-3">
-              <div className="flex items-center justify-between mb-2">
+            <div className="lg:hidden bg-white rounded-xl border border-gray-200 p-3 space-y-2">
+              <div className="flex items-center justify-between">
                 <span className="text-xs text-gray-400">
                   {index + 1} / {queue.length.toLocaleString()}
                 </span>
@@ -255,10 +297,20 @@ export default function ReviewWizard({
                 <select
                   value={assignUserId}
                   onChange={e => setAssignUserId(e.target.value)}
-                  className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2 mb-2 text-gray-600 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2 text-gray-600 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
                 >
                   <option value="">Assign to… (optional)</option>
                   {users.map(u => <option key={u.id} value={u.id}>{u.full_name}</option>)}
+                </select>
+              )}
+              {templates.length > 0 && (
+                <select
+                  value={templateId}
+                  onChange={e => setTemplateId(e.target.value)}
+                  className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2 text-gray-600 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                >
+                  <option value="">Task template… (optional)</option>
+                  {templates.map(t => <option key={t.id} value={t.id}>{t.title}</option>)}
                 </select>
               )}
               <div className="grid grid-cols-2 gap-2">
@@ -277,6 +329,21 @@ export default function ReviewWizard({
                 <Button size="sm" variant="ghost" className="text-red-400 hover:text-red-600 hover:bg-red-50 text-xs" onClick={doNotContact}>
                   Do not contact
                 </Button>
+              </div>
+              <div className="border-t pt-2">
+                <p className="text-xs text-gray-400 mb-1.5">Engagement tier</p>
+                <div className="flex gap-1.5">
+                  {(['Supporter', 'Active', 'Core'] as const).map(tier => (
+                    <button key={tier} onClick={() => addToBullseye(tier)}
+                      className={`flex-1 text-xs py-1.5 rounded-lg border font-medium transition-colors ${
+                        tier === 'Core' ? 'border-amber-200 text-amber-700 hover:bg-amber-50' :
+                        tier === 'Active' ? 'border-indigo-200 text-indigo-700 hover:bg-indigo-50' :
+                        'border-teal-200 text-teal-700 hover:bg-teal-50'
+                      }`}>
+                      {tier}
+                    </button>
+                  ))}
+                </div>
               </div>
             </div>
 
@@ -298,6 +365,23 @@ export default function ReviewWizard({
                 </select>
               )}
 
+              {templates.length > 0 && (
+                <select
+                  value={templateId}
+                  onChange={e => setTemplateId(e.target.value)}
+                  className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2 text-gray-600 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                >
+                  <option value="">Task template… (optional)</option>
+                  {templates.map(t => <option key={t.id} value={t.id}>{t.title}</option>)}
+                </select>
+              )}
+              {templateId && (() => {
+                const tpl = templates.find(t => t.id === templateId)
+                return tpl?.description ? (
+                  <p className="text-xs text-gray-500 bg-gray-50 rounded px-2 py-1.5">{tpl.description}</p>
+                ) : null
+              })()}
+
               {pipelineIds.has(contact.id) ? (
                 <div className="flex items-center gap-2 px-3 py-2 bg-green-50 rounded-lg border border-green-200">
                   <span className="text-green-700 text-sm font-medium">✓ In pipeline</span>
@@ -307,6 +391,22 @@ export default function ReviewWizard({
                   + Add to pipeline{assignUserId ? ` → ${users.find(u => u.id === assignUserId)?.full_name}` : ''}
                 </Button>
               )}
+
+              <div className="border-t pt-2 space-y-1.5">
+                <p className="text-xs text-gray-400 font-medium uppercase tracking-wide">Engagement tier</p>
+                <div className="flex gap-1.5">
+                  {(['Supporter', 'Active', 'Core'] as const).map(tier => (
+                    <button key={tier} onClick={() => addToBullseye(tier)}
+                      className={`flex-1 text-xs py-1.5 rounded-lg border font-medium transition-colors ${
+                        tier === 'Core' ? 'border-amber-200 text-amber-700 hover:bg-amber-50' :
+                        tier === 'Active' ? 'border-indigo-200 text-indigo-700 hover:bg-indigo-50' :
+                        'border-teal-200 text-teal-700 hover:bg-teal-50'
+                      }`}>
+                      {tier}
+                    </button>
+                  ))}
+                </div>
+              </div>
 
               <div className="border-t pt-3 mt-1 space-y-2">
                 <Button variant="outline" className="w-full justify-start border-green-200 text-green-700 hover:bg-green-50" onClick={markReviewed}>

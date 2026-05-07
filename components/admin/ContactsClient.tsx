@@ -1,9 +1,11 @@
 'use client'
 
 import { useState, useMemo } from 'react'
+import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { Badge } from '@/components/ui/badge'
 import Link from 'next/link'
+import { deleteAllContacts } from '@/app/(admin)/contacts/actions'
 
 type Contact = {
   id: string
@@ -69,8 +71,12 @@ export default function ContactsClient({
   openContactIds: string[]
 }) {
   const supabase = createClient()
+  const router = useRouter()
 
   const [search, setSearch] = useState('')
+  const [confirmDelete, setConfirmDelete] = useState(false)
+  const [deleting, setDeleting] = useState(false)
+  const [deleteError, setDeleteError] = useState('')
   const [typeFilter, setTypeFilter] = useState<'all' | 'volunteer' | 'donor' | 'sig' | 'press'>('all')
   const [outreachFilter, setOutreachFilter] = useState<'needs' | 'all'>('all')
   const [sortCol, setSortCol] = useState<SortCol>('date_added')
@@ -187,6 +193,19 @@ export default function ContactsClient({
       .not('status', 'in', '("Done","Committed","Declined","Unresponsive","Dropped","Skipped")')
   }
 
+  async function handleDeleteAll() {
+    setDeleting(true)
+    setDeleteError('')
+    const result = await deleteAllContacts()
+    if (result.error) {
+      setDeleteError(result.error)
+      setDeleting(false)
+      setConfirmDelete(false)
+    } else {
+      router.refresh()
+    }
+  }
+
   async function addSingle(contact: Contact) {
     setPipelineIds(prev => new Set([...prev, contact.id]))
     await supabase.from('actions').insert(actionParamsForContact(contact))
@@ -270,8 +289,24 @@ export default function ContactsClient({
           >
             ↓ CSV
           </button>
+          {confirmDelete ? (
+            <div className="flex items-center gap-2 bg-red-50 border border-red-200 rounded-lg px-3 py-1.5">
+              <span className="text-red-700 text-sm font-medium">Delete all {contacts.length.toLocaleString()} contacts?</span>
+              <button onClick={handleDeleteAll} disabled={deleting}
+                className="bg-red-600 text-white rounded px-2 py-0.5 text-xs hover:bg-red-700 disabled:opacity-50">
+                {deleting ? 'Deleting…' : 'Yes, delete all'}
+              </button>
+              <button onClick={() => setConfirmDelete(false)} className="text-gray-500 hover:text-gray-700 text-xs">Cancel</button>
+            </div>
+          ) : (
+            <button onClick={() => setConfirmDelete(true)}
+              className="border border-red-200 text-red-400 hover:text-red-600 hover:bg-red-50 rounded-lg px-3 py-1.5 text-sm transition-colors">
+              Delete all
+            </button>
+          )}
         </div>
       </div>
+      {deleteError && <p className="text-red-600 text-sm">{deleteError}</p>}
 
       {/* Filters */}
       <div className="flex flex-wrap gap-3 items-center">

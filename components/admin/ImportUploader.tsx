@@ -145,6 +145,49 @@ function buildDefaultFieldMap(headers: string[]): FieldMap {
   return Object.fromEntries(headers.map(h => [h, guessFieldMapping(h)]))
 }
 
+// ─── NH Town detection ────────────────────────────────────────────────────────
+
+const NH_TOWNS = new Set([
+  'alton', 'amherst', 'antrim', 'atkinson', 'auburn', 'barnstead', 'barrington',
+  'bartlett', 'bath', 'bedford', 'belmont', 'berlin', 'boscawen', 'bow',
+  'bradford', 'brentwood', 'brookline', 'canaan', 'candia', 'canterbury',
+  'charlestown', 'chester', 'chesterfield', 'chichester', 'claremont', 'colebrook',
+  'concord', 'conway', 'cornish', 'croydon', 'danville', 'deering', 'derry',
+  'dover', 'dunbarton', 'durham', 'east kingston', 'effingham', 'enfield',
+  'epping', 'epsom', 'exeter', 'farmington', 'fitzwilliam', 'francestown',
+  'franklin', 'freedom', 'fremont', 'gilford', 'gilmanton', 'goffstown',
+  'gorham', 'grafton', 'grantham', 'greenfield', 'greenland', 'hampstead',
+  'hampton', 'hampton falls', 'hanover', 'harrisville', 'haverhill', 'henniker',
+  'hill', 'hillsborough', 'hollis', 'hooksett', 'hopkinton', 'hudson', 'jackson',
+  'jaffrey', 'jefferson', 'keene', 'kensington', 'kingston', 'laconia', 'lancaster',
+  'lebanon', 'lincoln', 'lisbon', 'litchfield', 'littleton', 'londonderry',
+  'loudon', 'lyme', 'lyndeborough', 'madison', 'manchester', 'marlborough',
+  'mason', 'meredith', 'merrimack', 'milford', 'mont vernon', 'moultonborough',
+  'nashua', 'nelson', 'new boston', 'new durham', 'new hampton', 'new ipswich',
+  'new london', 'newbury', 'newfields', 'newington', 'newmarket', 'newport',
+  'newton', 'north conway', 'north hampton', 'northfield', 'northumberland',
+  'northwood', 'nottingham', 'orange', 'orford', 'ossipee', 'pelham', 'pembroke',
+  'penacook', 'peterborough', 'piermont', 'pittsfield', 'pittsburg', 'plainfield',
+  'plaistow', 'plymouth', 'portsmouth', 'raymond', 'rindge', 'rochester',
+  'rollinsford', 'rye', 'salem', 'sanbornton', 'sandown', 'sandwich', 'seabrook',
+  'somersworth', 'springfield', 'stratford', 'stratham', 'sunapee', 'sutton',
+  'swanzey', 'tamworth', 'temple', 'tilton', 'troy', 'tuftonboro', 'wakefield',
+  'walpole', 'warner', 'weare', 'westmoreland', 'whitefield', 'wilton',
+  'winchester', 'windham', 'wolfeboro', 'woodstock', 'west lebanon',
+])
+
+function detectNHTown(text: string): string | null {
+  if (!text) return null
+  const lower = text.toLowerCase()
+  for (const town of NH_TOWNS) {
+    const escaped = town.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+    if (new RegExp(`\\b${escaped}\\b`).test(lower)) {
+      return town.split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ')
+    }
+  }
+  return null
+}
+
 // ─── Role parsing ─────────────────────────────────────────────────────────────
 
 function parseMailingLists(value: string): Record<string, unknown> {
@@ -182,9 +225,17 @@ function applyFieldMap(row: ParsedRow, fieldMap: FieldMap, sourceForm: string): 
 
     switch (crmField) {
       case 'full_name': {
-        const parts = val.trim().split(/\s+/)
-        contact.first_name = parts[0] ?? ''
-        contact.last_name = parts.slice(1).join(' ') || ''
+        const s = val.trim()
+        if (s.includes(',')) {
+          // "Last, First" format
+          const [last, ...firstParts] = s.split(',').map(p => p.trim())
+          contact.first_name = firstParts.join(' ') || ''
+          contact.last_name = last || ''
+        } else {
+          const parts = s.split(/\s+/)
+          contact.first_name = parts[0] ?? ''
+          contact.last_name = parts.slice(1).join(' ') || ''
+        }
         break
       }
       case 'notes':
@@ -230,8 +281,18 @@ function applyFieldMap(row: ParsedRow, fieldMap: FieldMap, sourceForm: string): 
   if (sourceForm === 'Volunteer Interest Form') { contact.is_volunteer = true; contact.is_supporter = true; if (!contact.volunteer_stage) contact.volunteer_stage = 'New' }
   if (sourceForm === 'Signature Collector Signup') { contact.is_volunteer = true; contact.is_signature_collector = true; contact.is_supporter = true; if (!contact.signature_stage) contact.signature_stage = 'New lead' }
   if (sourceForm === 'Newsletter Signup') { contact.newsletter_subscriber = true; contact.email_opt_in = true; contact.is_supporter = true }
-  if (sourceForm === 'Donation Form') { contact.is_donor = true; if (!contact.donor_stage) contact.donor_stage = 'Donated' }
+  // Donation Form: only mark as donor if donation data was present in the CSV
+  if (sourceForm === 'Donation Form' && !contact.is_donor) { contact.donor_stage = contact.donor_stage ?? 'Prospect' }
   if (sourceForm === 'Pledge Form') { contact.is_supporter = true; contact.is_volunteer = true; if (!contact.volunteer_stage) contact.volunteer_stage = 'New' }
+
+  // NH town detection: if no town found, check notes for NH town names
+  if (!contact.town && contact.notes) {
+    const detected = detectNHTown(contact.notes as string)
+    if (detected) {
+      contact.town = detected
+      if (!contact.state) contact.state = 'NH'
+    }
+  }
 
   return contact
 }
@@ -331,7 +392,36 @@ export default function ImportUploader() {
 
       let contactId: string
       if (row._action === 'merge' && row._match) {
-        await supabase.from('contacts').update(contactData).eq('id', row._match.contact_id)
+        // Non-destructive merge: fetch existing, fill blanks, OR flags, append notes
+        const { data: existing } = await supabase
+          .from('contacts')
+          .select('*')
+          .eq('id', row._match.contact_id)
+          .single()
+
+        const patch: Record<string, any> = { updated_at: new Date().toISOString() }
+
+        for (const [key, newVal] of Object.entries(contactData)) {
+          if (key === 'updated_at' || key === 'source' || key === 'original_source_form') continue
+          const existingVal = existing?.[key]
+
+          if (key === 'notes') {
+            if (newVal && existingVal) {
+              patch.notes = `${existingVal}\n\n--- imported ${new Date().toLocaleDateString()} ---\n${newVal}`
+            } else if (newVal && !existingVal) {
+              patch.notes = newVal
+            }
+          } else if (typeof newVal === 'boolean') {
+            // Only promote to true, never demote
+            if (newVal === true && existingVal !== true) patch[key] = true
+          } else if (newVal !== null && newVal !== '' && (existingVal === null || existingVal === '' || existingVal === undefined)) {
+            patch[key] = newVal
+          }
+        }
+
+        if (Object.keys(patch).length > 1) {
+          await supabase.from('contacts').update(patch).eq('id', row._match.contact_id)
+        }
         contactId = row._match.contact_id
       } else {
         const { data: newContact } = await supabase.from('contacts').insert(contactData).select('id').single()

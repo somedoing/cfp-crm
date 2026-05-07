@@ -23,7 +23,7 @@ async function fetchAll(supabase: Awaited<ReturnType<typeof createClient>>) {
 export default async function ReviewPage() {
   const supabase = await createClient()
 
-  const [contacts, { data: openActions }, { data: profiles }] = await Promise.all([
+  const [contacts, { data: openActions }, { data: profiles }, { data: taskTemplates }] = await Promise.all([
     fetchAll(supabase),
     supabase
       .from('actions')
@@ -34,6 +34,10 @@ export default async function ReviewPage() {
       .from('profiles')
       .select('id, full_name')
       .order('full_name'),
+    supabase
+      .from('task_templates')
+      .select('id, title, description, suggested_ask, suggested_message, action_type, action_area, priority')
+      .order('title'),
   ])
 
   const openContactIds = [...new Set(openActions?.map((a: any) => a.contact_id) ?? [])]
@@ -43,6 +47,7 @@ export default async function ReviewPage() {
       contacts={contacts as any}
       initialPipelineIds={openContactIds}
       users={(profiles ?? []) as any}
+      templates={(taskTemplates ?? []) as any}
     />
   )
 }
