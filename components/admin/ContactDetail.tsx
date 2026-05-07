@@ -4,6 +4,7 @@ import { useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import Link from 'next/link'
@@ -33,6 +34,8 @@ const STATUS_COLORS: Record<string, string> = {
 type Contact = {
   id: string
   display_id: string | null
+  first_name: string | null
+  last_name: string | null
   full_name: string
   email: string | null
   phone: string | null
@@ -108,6 +111,17 @@ export default function ContactDetail({
 }) {
   const supabase = createClient()
 
+  // Basic info (editable)
+  const [firstName, setFirstName] = useState(initial.first_name ?? '')
+  const [lastName, setLastName] = useState(initial.last_name ?? '')
+  const [email, setEmail] = useState(initial.email ?? '')
+  const [phone, setPhone] = useState(initial.phone ?? '')
+  const [town, setTown] = useState(initial.town ?? '')
+  const [stateVal, setStateVal] = useState(initial.state ?? '')
+  const [zip, setZip] = useState(initial.zip ?? '')
+  const [savingInfo, setSavingInfo] = useState(false)
+  const [infoSaved, setInfoSaved] = useState(false)
+
   const [volunteerStage, setVolunteerStageState] = useState(initial.volunteer_stage ?? '')
   const [donorStage, setDonorStageState] = useState(initial.donor_stage ?? '')
   const [priority, setPriorityState] = useState(initial.priority ?? '')
@@ -130,6 +144,23 @@ export default function ContactDetail({
       [field]: value || null,
       updated_at: new Date().toISOString(),
     }).eq('id', initial.id)
+  }
+
+  async function saveContactInfo() {
+    setSavingInfo(true)
+    await supabase.from('contacts').update({
+      first_name: firstName.trim() || null,
+      last_name: lastName.trim() || null,
+      email: email.trim() || null,
+      phone: phone.trim() || null,
+      town: town.trim() || null,
+      state: stateVal.trim() || null,
+      zip: zip.trim() || null,
+      updated_at: new Date().toISOString(),
+    }).eq('id', initial.id)
+    setSavingInfo(false)
+    setInfoSaved(true)
+    setTimeout(() => setInfoSaved(false), 2000)
   }
 
   async function handleVolunteerStage(val: string | null) {
@@ -180,7 +211,8 @@ export default function ContactDetail({
 
   const openActions = actions.filter(a => !CLOSED_STATUSES.includes(a.status))
   const closedActions = actions.filter(a => CLOSED_STATUSES.includes(a.status))
-  const location = [initial.town, initial.state].filter(Boolean).join(', ')
+  const displayName = [firstName, lastName].filter(Boolean).join(' ').trim()
+    || initial.email || initial.display_id || '(no name)'
 
   return (
     <div className="max-w-3xl space-y-6">
@@ -191,26 +223,15 @@ export default function ContactDetail({
 
       {/* Header card */}
       <div className="bg-white rounded-xl border border-gray-200 p-6">
-        <div className="flex items-start justify-between gap-4">
-          <div>
-            <div className="flex items-center gap-2">
-              <h1 className="text-2xl font-semibold text-gray-900">{initial.full_name}</h1>
-              {initial.display_id && (
-                <span className="text-gray-400 text-sm font-mono">{initial.display_id}</span>
-              )}
-              {initial.do_not_contact && (
-                <Badge variant="destructive">Do not contact</Badge>
-              )}
-            </div>
-            <div className="mt-2 space-y-0.5 text-gray-600">
-              {initial.email && <div>{initial.email}</div>}
-              {initial.phone && <div>{initial.phone}</div>}
-              {location && (
-                <div>{location}{initial.zip ? ` ${initial.zip}` : ''}{initial.county ? ` · ${initial.county} Co.` : ''}</div>
-              )}
-            </div>
+        <div className="flex items-start justify-between gap-4 mb-4">
+          <div className="flex items-center gap-2 flex-wrap">
+            <h1 className="text-2xl font-semibold text-gray-900">{displayName}</h1>
+            {initial.display_id && (
+              <span className="text-gray-400 text-sm font-mono">{initial.display_id}</span>
+            )}
+            {initial.do_not_contact && <Badge variant="destructive">Do not contact</Badge>}
           </div>
-          <div className="text-right shrink-0 space-y-1">
+          <div className="text-right shrink-0 space-y-0.5">
             {initial.date_added && (
               <div className="text-gray-400 text-sm">Added {initial.date_added}</div>
             )}
@@ -221,6 +242,25 @@ export default function ContactDetail({
               <div className="text-gray-400 text-xs">{initial.original_source_form}</div>
             )}
           </div>
+        </div>
+
+        {/* Editable basic info */}
+        <div className="grid grid-cols-2 gap-2">
+          <Input placeholder="First name" value={firstName} onChange={e => setFirstName(e.target.value)} className="h-8 text-sm" />
+          <Input placeholder="Last name" value={lastName} onChange={e => setLastName(e.target.value)} className="h-8 text-sm" />
+          <Input placeholder="Email" type="email" value={email} onChange={e => setEmail(e.target.value)} className="h-8 text-sm" />
+          <Input placeholder="Phone" value={phone} onChange={e => setPhone(e.target.value)} className="h-8 text-sm" />
+          <Input placeholder="Town" value={town} onChange={e => setTown(e.target.value)} className="h-8 text-sm" />
+          <div className="flex gap-2">
+            <Input placeholder="State" value={stateVal} onChange={e => setStateVal(e.target.value)} className="h-8 text-sm w-20" />
+            <Input placeholder="Zip" value={zip} onChange={e => setZip(e.target.value)} className="h-8 text-sm flex-1" />
+          </div>
+        </div>
+        <div className="flex items-center gap-2 mt-2">
+          <Button size="sm" variant="outline" onClick={saveContactInfo} disabled={savingInfo}>
+            {savingInfo ? 'Saving…' : 'Save info'}
+          </Button>
+          {infoSaved && <span className="text-green-600 text-sm">Saved</span>}
         </div>
 
         {/* Flags */}

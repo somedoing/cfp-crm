@@ -7,6 +7,7 @@ import Link from 'next/link'
 
 type Contact = {
   id: string
+  display_id: string | null
   full_name: string
   email: string | null
   phone: string | null
@@ -252,6 +253,12 @@ export default function ContactsClient({
         <div className="flex items-center gap-3">
           <span className="text-gray-500">{filtered.length.toLocaleString()} shown</span>
           <Link
+            href="/contacts/new"
+            className="border border-gray-300 rounded-lg px-3 py-1.5 text-gray-700 hover:bg-gray-50 transition-colors font-medium"
+          >
+            + New contact
+          </Link>
+          <Link
             href="/contacts/review"
             className="border border-blue-200 bg-blue-50 text-blue-700 hover:bg-blue-100 rounded-lg px-3 py-1.5 font-medium transition-colors"
           >
@@ -408,7 +415,7 @@ export default function ContactsClient({
                       className="font-medium text-blue-600 hover:underline"
                       onClick={e => e.stopPropagation()}
                     >
-                      {contact.full_name}
+                      {contact.full_name || contact.email || contact.display_id || '(no name)'}
                     </Link>
                     {contact.priority === 'High' && (
                       <span className="ml-2 text-red-500 font-medium">·· High</span>
