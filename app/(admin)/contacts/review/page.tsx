@@ -1,7 +1,7 @@
 import { createClient } from '@/lib/supabase/server'
 import ReviewWizard from '@/components/admin/ReviewWizard'
 
-const FIELDS = 'id, display_id, first_name, last_name, full_name, email, phone, town, state, zip, county, source, original_source_form, is_volunteer, is_active_volunteer, is_donor, is_signature_collector, is_press_contact, is_media_contact, is_candidate_partner, is_supporter, is_coalition_contact, email_opt_in, text_opt_in, newsletter_subscriber, in_discord, discord_username, volunteer_stage, donor_stage, signature_stage, discord_stage, media_stage, priority, date_added, notes, do_not_contact, reviewed_at'
+const FIELDS = 'id, display_id, first_name, last_name, full_name, email, phone, town, state, zip, county, source, original_source_form, is_volunteer, is_active_volunteer, is_donor, is_signature_collector, is_press_contact, is_media_contact, is_candidate_partner, is_supporter, is_coalition_contact, email_opt_in, text_opt_in, newsletter_subscriber, in_discord, discord_username, volunteer_stage, donor_stage, signature_stage, discord_stage, media_stage, priority, date_added, notes, do_not_contact, reviewed_at, tags'
 
 async function fetchAll(supabase: Awaited<ReturnType<typeof createClient>>) {
   const all: any[] = []

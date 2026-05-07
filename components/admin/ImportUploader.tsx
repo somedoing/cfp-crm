@@ -176,6 +176,20 @@ const NH_TOWNS = new Set([
   'winchester', 'windham', 'wolfeboro', 'woodstock', 'west lebanon',
 ])
 
+function computeAutoTags(contact: Record<string, unknown>): string[] {
+  const tags: string[] = []
+  if (contact.is_donor) tags.push('Past Donor')
+  if (contact.is_volunteer) {
+    const year = contact.date_added ? new Date(contact.date_added as string).getFullYear() : null
+    tags.push(year && year < 2026 ? 'Old Volunteer Signup' : 'Volunteer Signup')
+  }
+  if (contact.is_active_volunteer) tags.push('Active Volunteer')
+  if (contact.is_supporter) tags.push('Jon Kiper Supporter')
+  if (contact.is_coalition_contact) tags.push('Org Contact')
+  if (contact.is_media_contact || contact.is_press_contact) tags.push('Media / Influencer Contact')
+  return tags
+}
+
 function detectNHTown(text: string): string | null {
   if (!text) return null
   const lower = text.toLowerCase()
@@ -293,6 +307,8 @@ function applyFieldMap(row: ParsedRow, fieldMap: FieldMap, sourceForm: string): 
       if (!contact.state) contact.state = 'NH'
     }
   }
+
+  contact.tags = computeAutoTags(contact)
 
   return contact
 }
@@ -412,6 +428,11 @@ export default function ImportUploader() {
             } else if (newVal && !existingVal) {
               patch.notes = newVal
             }
+          } else if (key === 'tags') {
+            const existingTags: string[] = Array.isArray(existingVal) ? existingVal : []
+            const newTags: string[] = Array.isArray(newVal) ? newVal : []
+            const merged = [...new Set([...existingTags, ...newTags])]
+            if (merged.length > existingTags.length) patch.tags = merged
           } else if (typeof newVal === 'boolean') {
             // Only promote to true, never demote
             if (newVal === true && existingVal !== true) patch[key] = true

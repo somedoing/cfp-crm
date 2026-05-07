@@ -8,6 +8,7 @@ import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import Link from 'next/link'
+import { ALL_TAGS } from '@/lib/tags'
 
 const VOLUNTEER_STAGES = ['New','Contacted','Interested','Asked','Assigned','Active','Reliable','Lead','Paused','Inactive','Not a fit']
 const DONOR_STAGES = ['Prospect','Not asked','Asked','Pledged','Donated','Thanked','Recurring','Lapsed','Do not solicit']
@@ -62,6 +63,7 @@ type ReviewContact = {
   notes: string | null
   do_not_contact: boolean
   reviewed_at: string | null
+  tags: string[]
 }
 
 function actionParams(contact: ReviewContact) {
@@ -454,7 +456,20 @@ const WizardCard = forwardRef<WizardCardHandle, {
   const [stateVal, setStateVal] = useState(contact.state ?? '')
   const [zip, setZip] = useState(contact.zip ?? '')
   const [notes, setNotes] = useState(contact.notes ?? '')
+  const [tags, setTags] = useState<string[]>(contact.tags ?? [])
   const [saving, setSaving] = useState(false)
+
+  async function addTag(tag: string) {
+    const next = [...new Set([...tags, tag])]
+    setTags(next)
+    await supabase.from('contacts').update({ tags: next, updated_at: new Date().toISOString() }).eq('id', contact.id)
+  }
+
+  async function removeTag(tag: string) {
+    const next = tags.filter(t => t !== tag)
+    setTags(next)
+    await supabase.from('contacts').update({ tags: next, updated_at: new Date().toISOString() }).eq('id', contact.id)
+  }
 
   // Expose saveAll for parent to flush before advancing
   useImperativeHandle(ref, () => ({
@@ -656,6 +671,32 @@ const WizardCard = forwardRef<WizardCardHandle, {
           placeholder="Notes about this person…"
           className="resize-none h-16 text-sm"
         />
+      </div>
+
+      {/* Tags */}
+      <div>
+        <p className="text-xs text-gray-400 mb-1.5">Tags</p>
+        <div className="flex flex-wrap gap-1 mb-1.5">
+          {tags.map(tag => (
+            <button
+              key={tag}
+              onClick={() => removeTag(tag)}
+              className="flex items-center gap-1 px-2 py-0.5 rounded-full bg-blue-50 text-blue-700 border border-blue-200 text-xs hover:bg-red-50 hover:text-red-600 hover:border-red-200 transition-colors"
+            >
+              {tag} <span className="opacity-60">×</span>
+            </button>
+          ))}
+        </div>
+        <select
+          value=""
+          onChange={e => e.target.value && addTag(e.target.value)}
+          className="text-xs border border-gray-200 rounded-lg px-2 py-1 text-gray-500 bg-white focus:outline-none focus:ring-1 focus:ring-blue-400"
+        >
+          <option value="">+ Add tag…</option>
+          {ALL_TAGS.filter(t => !tags.includes(t)).map(t => (
+            <option key={t} value={t}>{t}</option>
+          ))}
+        </select>
       </div>
 
       {saving && <p className="text-xs text-gray-400">Saving…</p>}

@@ -9,6 +9,7 @@ import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import Link from 'next/link'
+import { ALL_TAGS } from '@/lib/tags'
 
 const VOLUNTEER_STAGES = ['New','Contacted','Interested','Asked','Assigned','Active','Reliable','Lead','Paused','Inactive','Not a fit']
 const DONOR_STAGES = ['Prospect','Not asked','Asked','Pledged','Donated','Thanked','Recurring','Lapsed','Do not solicit']
@@ -73,6 +74,7 @@ type Contact = {
   last_contact_summary: string | null
   notes: string | null
   date_added: string | null
+  tags: string[]
 }
 
 type Action = {
@@ -129,6 +131,7 @@ export default function ContactDetail({
   const [notes, setNotes] = useState(initial.notes ?? '')
   const [notesSaved, setNotesSaved] = useState(false)
   const [savingNotes, setSavingNotes] = useState(false)
+  const [tags, setTags] = useState<string[]>(initial.tags ?? [])
   const [interactions, setInteractions] = useState<Interaction[]>(initialInteractions)
 
   // Interaction form
@@ -180,6 +183,18 @@ export default function ContactDetail({
     if (!val) return
     setPriorityState(val)
     await saveField('priority', val)
+  }
+
+  async function addTag(tag: string) {
+    const next = [...new Set([...tags, tag])]
+    setTags(next)
+    await supabase.from('contacts').update({ tags: next, updated_at: new Date().toISOString() }).eq('id', initial.id)
+  }
+
+  async function removeTag(tag: string) {
+    const next = tags.filter(t => t !== tag)
+    setTags(next)
+    await supabase.from('contacts').update({ tags: next, updated_at: new Date().toISOString() }).eq('id', initial.id)
   }
 
   async function saveNotes() {
@@ -292,6 +307,32 @@ export default function ContactDetail({
           {initial.is_coalition_contact && <Badge variant="secondary">Coalition</Badge>}
           {initial.email_opt_in && <Badge variant="secondary">Email opt-in</Badge>}
           {initial.text_opt_in && <Badge variant="secondary">Text opt-in</Badge>}
+        </div>
+
+        {/* Tags */}
+        <div className="mt-4">
+          <p className="text-xs text-gray-400 font-medium uppercase tracking-wide mb-1.5">Tags</p>
+          <div className="flex flex-wrap gap-1.5 mb-2">
+            {tags.map(tag => (
+              <button
+                key={tag}
+                onClick={() => removeTag(tag)}
+                className="flex items-center gap-1 px-2 py-0.5 rounded-full bg-blue-50 text-blue-700 border border-blue-200 text-xs hover:bg-red-50 hover:text-red-600 hover:border-red-200 transition-colors"
+              >
+                {tag} <span className="opacity-60">×</span>
+              </button>
+            ))}
+          </div>
+          <select
+            value=""
+            onChange={e => e.target.value && addTag(e.target.value)}
+            className="text-xs border border-gray-200 rounded-lg px-2 py-1.5 text-gray-500 bg-white focus:outline-none focus:ring-1 focus:ring-blue-400"
+          >
+            <option value="">+ Add tag…</option>
+            {ALL_TAGS.filter(t => !tags.includes(t)).map(t => (
+              <option key={t} value={t}>{t}</option>
+            ))}
+          </select>
         </div>
 
         {/* Editable stages row */}

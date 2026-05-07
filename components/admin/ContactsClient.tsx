@@ -6,6 +6,7 @@ import { createClient } from '@/lib/supabase/client'
 import { Badge } from '@/components/ui/badge'
 import Link from 'next/link'
 import { deleteAllContacts } from '@/app/(admin)/contacts/actions'
+import { ALL_TAGS } from '@/lib/tags'
 
 type Contact = {
   id: string
@@ -25,6 +26,7 @@ type Contact = {
   priority: string | null
   date_added: string | null
   do_not_contact: boolean
+  tags: string[] | null
 }
 
 type SortCol = 'date_added' | 'full_name' | 'town' | 'volunteer_stage'
@@ -79,6 +81,7 @@ export default function ContactsClient({
   const [deleteError, setDeleteError] = useState('')
   const [typeFilter, setTypeFilter] = useState<'all' | 'volunteer' | 'donor' | 'sig' | 'press'>('all')
   const [outreachFilter, setOutreachFilter] = useState<'needs' | 'all'>('all')
+  const [tagFilter, setTagFilter] = useState<string>('')
   const [sortCol, setSortCol] = useState<SortCol>('date_added')
   const [sortDir, setSortDir] = useState<SortDir>('desc')
   const [selected, setSelected] = useState<Set<string>>(new Set())
@@ -98,6 +101,7 @@ export default function ContactsClient({
     if (typeFilter === 'donor') result = result.filter(c => c.is_donor)
     if (typeFilter === 'sig') result = result.filter(c => c.is_signature_collector)
     if (typeFilter === 'press') result = result.filter(c => c.is_press_contact || c.is_media_contact)
+    if (tagFilter) result = result.filter(c => c.tags?.includes(tagFilter))
 
     if (search.trim()) {
       const q = search.toLowerCase()
@@ -128,7 +132,7 @@ export default function ContactsClient({
     })
 
     return result
-  }, [contacts, search, typeFilter, outreachFilter, pipelineIds, sortCol, sortDir])
+  }, [contacts, search, typeFilter, outreachFilter, tagFilter, pipelineIds, sortCol, sortDir])
 
   const visible = filtered.slice(0, 200)
   const visibleIds = useMemo(() => new Set(visible.map(c => c.id)), [visible])
@@ -356,6 +360,15 @@ export default function ContactsClient({
             All
           </button>
         </div>
+
+        <select
+          value={tagFilter}
+          onChange={e => setTagFilter(e.target.value)}
+          className="border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-600 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+        >
+          <option value="">All tags</option>
+          {ALL_TAGS.map(t => <option key={t} value={t}>{t}</option>)}
+        </select>
 
         {/* Batch action bar */}
         {selectedVisible.length > 0 && (
