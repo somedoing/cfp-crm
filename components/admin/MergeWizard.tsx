@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import Link from 'next/link'
+import { useRouter } from 'next/navigation'
 import { mergeContacts } from '@/app/(admin)/contacts/merge/actions'
 
 type Contact = {
@@ -80,6 +81,7 @@ function defaultChoices(a: Contact, b: Contact): Record<string, 'a' | 'b'> {
 }
 
 function PairRow({ pair, onDismiss }: { pair: DupePair; onDismiss: () => void }) {
+  const router = useRouter()
   const [open, setOpen] = useState(false)
   const [primaryId, setPrimaryId] = useState(pair.a.id)
   const [fieldChoices, setFieldChoices] = useState<Record<string, 'a' | 'b'>>(() => defaultChoices(pair.a, pair.b))
@@ -155,8 +157,9 @@ function PairRow({ pair, onDismiss }: { pair: DupePair; onDismiss: () => void })
         setMerging(false)
         return
       }
-      // Force full page reload so server re-fetches fresh pair list
-      window.location.reload()
+      // Remove pair from local list immediately, refresh server cache in background
+      onDismiss()
+      router.refresh()
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e))
       setMerging(false)
