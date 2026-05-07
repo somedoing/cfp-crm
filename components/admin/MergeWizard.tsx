@@ -75,28 +75,23 @@ const BOOL_FLAGS: (keyof Contact)[] = [
 function defaultChoices(a: Contact, b: Contact): Record<string, 'a' | 'b'> {
   const choices: Record<string, 'a' | 'b'> = {}
   for (const { key } of CHOICE_FIELDS) {
-    // Default to A, but switch to B if A is blank and B isn't
     choices[key as string] = (!a[key] && b[key]) ? 'b' : 'a'
   }
   return choices
 }
 
-export default function MergeWizard({ pairs: initialPairs }: { pairs: DupePair[] }) {
+function PairRow({ pair, onDismiss }: { pair: DupePair; onDismiss: () => void }) {
   const router = useRouter()
-  const [pairs, setPairs] = useState(initialPairs)
-  const [activePair, setActivePair] = useState<DupePair | null>(null)
-  const [primaryId, setPrimaryId] = useState('')
-  const [fieldChoices, setFieldChoices] = useState<Record<string, 'a' | 'b'>>({})
+  const [open, setOpen] = useState(false)
+  const [primaryId, setPrimaryId] = useState(pair.a.id)
+  const [fieldChoices, setFieldChoices] = useState<Record<string, 'a' | 'b'>>(() => defaultChoices(pair.a, pair.b))
   const [merging, setMerging] = useState(false)
-  const [mergedCount, setMergedCount] = useState(0)
   const [error, setError] = useState('')
 
-  function openPair(pair: DupePair) {
-    setActivePair(pair)
-    setPrimaryId(pair.a.id)
-    setFieldChoices(defaultChoices(pair.a, pair.b))
-    setError('')
-  }
+  const { a, b } = pair
+  const isPrimaryA = primaryId === a.id
+  const primary = isPrimaryA ? a : b
+  const secondary = isPrimaryA ? b : a
 
   function flipPrimary(newId: string) {
     if (newId === primaryId) return
@@ -108,47 +103,43 @@ export default function MergeWizard({ pairs: initialPairs }: { pairs: DupePair[]
     })
   }
 
+  const conflicts = CHOICE_FIELDS.filter(({ key }) => {
+    const aVal = a[key]
+    const bVal = b[key]
+    return aVal && bVal && aVal !== bVal
+  })
+
+  const hasDifferentEmails = a.email && b.email && a.email !== b.email
+
   async function handleMerge() {
-    if (!activePair) return
     setMerging(true)
     setError('')
 
-    const { a, b } = activePair
-    const isPrimaryA = primaryId === a.id
-    const primary = isPrimaryA ? a : b
-    const secondary = isPrimaryA ? b : a
-
     const mergedData: Record<string, unknown> = {}
 
-    // User-chosen fields
     for (const { key } of CHOICE_FIELDS) {
       const val = fieldChoices[key as string] === 'a' ? a[key] : b[key]
       mergedData[key as string] = val || null
     }
 
-    // Boolean flags: OR
     for (const flag of BOOL_FLAGS) {
       mergedData[flag as string] = !!(a[flag] || b[flag])
     }
 
-    // Tags: union
     mergedData.tags = [...new Set([...(a.tags ?? []), ...(b.tags ?? [])])]
 
-    // Date added: keep earliest
     if (a.date_added && b.date_added) {
       mergedData.date_added = a.date_added < b.date_added ? a.date_added : b.date_added
     } else {
       mergedData.date_added = a.date_added || b.date_added
     }
 
-    // Notes: combine if both have content
     if (primary.notes && secondary.notes && primary.notes !== secondary.notes) {
       mergedData.notes = `${primary.notes}\n\n--- merged from duplicate ---\n${secondary.notes}`
     } else {
       mergedData.notes = primary.notes || secondary.notes || null
     }
 
-    // Alternative emails: collect secondary email + any existing alternative_emails from both
     const altEmails = [
       ...(primary.alternative_emails ?? []),
       ...(secondary.alternative_emails ?? []),
@@ -167,26 +158,170 @@ export default function MergeWizard({ pairs: initialPairs }: { pairs: DupePair[]
       return
     }
 
-    setPairs(prev => prev.filter(p => p.key !== activePair.key))
-    setMergedCount(n => n + 1)
-    setActivePair(null)
-    setMerging(false)
-    router.refresh()
+    // Hard navigate to reload fresh server data
+    router.push('/contacts/merge')
   }
 
-  const primary = activePair ? (primaryId === activePair.a.id ? activePair.a : activePair.b) : null
-  const secondary = activePair ? (primaryId === activePair.a.id ? activePair.b : activePair.a) : null
+  return (
+    <div className="border border-gray-200 rounded-xl bg-white overflow-hidden">
+      {/* Header row — always visible */}
+      <div className="flex items-center gap-3 px-4 py-3">
+        <span className={`text-xs px-1.5 py-0.5 rounded font-medium shrink-0 ${pair.reason === 'email' ? 'bg-blue-100 text-blue-700' : 'bg-purple-100 text-purple-700'}`}>
+          {pair.reason}
+        </span>
+        <div className="flex-1 min-w-0">
+          <span className="text-sm font-medium text-gray-900">{a.full_name || a.email || '—'}</span>
+          <span className="text-gray-400 mx-2 text-sm">vs</span>
+          <span className="text-sm text-gray-600">{b.full_name || b.email || '—'}</span>
+          {a.email !== b.email && a.email && b.email && (
+            <span className="ml-2 text-xs text-orange-500">different emails</span>
+          )}
+        </div>
+        <div className="flex items-center gap-2 shrink-0">
+          <button
+            onClick={() => { onDismiss() }}
+            className="text-xs text-gray-400 hover:text-gray-600 px-2 py-1 rounded hover:bg-gray-100"
+          >
+            Not duplicates
+          </button>
+          <button
+            onClick={() => setOpen(o => !o)}
+            className="text-xs text-blue-600 hover:text-blue-800 px-2 py-1 rounded hover:bg-blue-50 font-medium"
+          >
+            {open ? 'Close ▲' : 'Review ▼'}
+          </button>
+        </div>
+      </div>
 
-  const conflicts = activePair
-    ? CHOICE_FIELDS.filter(({ key }) => {
-        const aVal = activePair.a[key]
-        const bVal = activePair.b[key]
-        return aVal && bVal && aVal !== bVal
-      })
-    : []
+      {/* Expanded detail */}
+      {open && (
+        <div className="border-t border-gray-100 p-4 space-y-4 bg-gray-50">
 
-  const hasDifferentEmails = activePair?.a.email && activePair?.b.email &&
-    activePair.a.email !== activePair.b.email
+          {/* Two contact cards */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            {[a, b].map(contact => {
+              const isPrimary = contact.id === primaryId
+              return (
+                <div key={contact.id} className={`rounded-lg border-2 p-3 bg-white transition-all ${isPrimary ? 'border-blue-400' : 'border-gray-200'}`}>
+                  <div className="flex items-center justify-between mb-2">
+                    <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${isPrimary ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-500'}`}>
+                      {isPrimary ? '★ Primary (keep)' : 'Secondary (delete)'}
+                    </span>
+                    {!isPrimary && (
+                      <button onClick={() => flipPrimary(contact.id)} className="text-xs text-blue-600 hover:underline">
+                        Make primary
+                      </button>
+                    )}
+                  </div>
+                  <p className="font-semibold text-gray-900 truncate">{contact.full_name || '(no name)'}</p>
+                  <div className="mt-2 space-y-0.5">
+                    {[
+                      { label: 'Email',        value: contact.email },
+                      { label: 'Phone',        value: contact.phone },
+                      { label: 'Town',         value: contact.town },
+                      { label: 'State',        value: contact.state },
+                      { label: 'ZIP',          value: contact.zip },
+                      { label: 'Source',       value: contact.source },
+                      { label: 'Added',        value: contact.date_added },
+                      { label: 'Vol stage',    value: contact.volunteer_stage },
+                      { label: 'Donor stage',  value: contact.donor_stage },
+                      { label: 'Discord',      value: contact.discord_username },
+                    ].map(({ label, value }) => (
+                      <div key={label} className="flex gap-1.5 text-xs">
+                        <span className="text-gray-400 w-20 shrink-0">{label}</span>
+                        <span className={value ? 'text-gray-700' : 'text-gray-300'}>{value || '—'}</span>
+                      </div>
+                    ))}
+                    <div className="flex gap-1 text-xs pt-0.5 flex-wrap">
+                      {contact.is_volunteer && <span className="bg-gray-100 text-gray-600 rounded px-1">Vol</span>}
+                      {contact.is_donor && <span className="bg-gray-100 text-gray-600 rounded px-1">Donor</span>}
+                      {contact.is_signature_collector && <span className="bg-gray-100 text-gray-600 rounded px-1">Sig</span>}
+                      {contact.is_supporter && <span className="bg-gray-100 text-gray-600 rounded px-1">Supporter</span>}
+                      {contact.newsletter_subscriber && <span className="bg-gray-100 text-gray-600 rounded px-1">Newsletter</span>}
+                      {contact.do_not_contact && <span className="bg-red-100 text-red-600 rounded px-1">DNC</span>}
+                    </div>
+                    {contact.tags && contact.tags.length > 0 && (
+                      <p className="text-xs text-blue-600 truncate">{contact.tags.join(', ')}</p>
+                    )}
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+
+          {/* Conflicting fields */}
+          {conflicts.length > 0 && (
+            <div>
+              <p className="text-xs text-gray-500 font-medium uppercase tracking-wide mb-2">Conflicting fields — click to pick</p>
+              <div className="space-y-1.5">
+                {conflicts.map(({ key, label }) => {
+                  const aVal = String(a[key] ?? '')
+                  const bVal = String(b[key] ?? '')
+                  const choice = fieldChoices[key as string]
+                  return (
+                    <div key={key as string} className="flex items-center gap-2 text-sm">
+                      <span className="text-gray-400 text-xs w-24 shrink-0">{label}</span>
+                      <button
+                        onClick={() => setFieldChoices(p => ({ ...p, [key as string]: 'a' }))}
+                        className={`px-2 py-1 rounded border text-xs flex-1 text-left truncate transition-colors ${choice === 'a' ? 'bg-blue-600 text-white border-blue-600' : 'bg-white border-gray-200 text-gray-600 hover:border-blue-300'}`}
+                      >
+                        {aVal} {isPrimaryA && <span className="opacity-60">(primary)</span>}
+                      </button>
+                      <button
+                        onClick={() => setFieldChoices(p => ({ ...p, [key as string]: 'b' }))}
+                        className={`px-2 py-1 rounded border text-xs flex-1 text-left truncate transition-colors ${choice === 'b' ? 'bg-blue-600 text-white border-blue-600' : 'bg-white border-gray-200 text-gray-600 hover:border-blue-300'}`}
+                      >
+                        {bVal} {!isPrimaryA && <span className="opacity-60">(primary)</span>}
+                      </button>
+                    </div>
+                  )
+                })}
+              </div>
+            </div>
+          )}
+
+          {/* Auto-merge summary */}
+          <div className="bg-white rounded-lg border border-gray-200 p-3 text-xs text-gray-500 space-y-1">
+            <p className="font-medium text-gray-600 mb-1">Automatically handled on merge:</p>
+            <p>· All role flags are OR'd — no flag will be lost</p>
+            <p>· Tags are combined into one set</p>
+            <p>· Earliest date-added is kept</p>
+            <p>· All actions and interactions move to the primary record</p>
+            {hasDifferentEmails && (
+              <p>· <span className="font-medium text-gray-700">{secondary.email}</span> saved to alternative emails</p>
+            )}
+          </div>
+
+          {error && <p className="text-red-600 text-sm bg-red-50 rounded p-2">{error}</p>}
+
+          <div className="flex gap-3">
+            <button
+              onClick={handleMerge}
+              disabled={merging}
+              className="bg-blue-600 text-white px-4 py-2 rounded-lg font-medium hover:bg-blue-700 disabled:opacity-50 transition-colors text-sm"
+            >
+              {merging ? 'Merging…' : `Merge — keep ${primary.full_name || primary.email || 'primary'}`}
+            </button>
+            <button
+              onClick={onDismiss}
+              className="px-4 py-2 rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-50 transition-colors text-sm"
+            >
+              Not duplicates
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
+export default function MergeWizard({ pairs: initialPairs }: { pairs: DupePair[] }) {
+  const [pairs, setPairs] = useState(initialPairs)
+  const [mergedCount, setMergedCount] = useState(0)
+
+  function dismiss(key: string) {
+    setPairs(prev => prev.filter(p => p.key !== key))
+  }
 
   return (
     <div className="space-y-4">
@@ -194,7 +329,7 @@ export default function MergeWizard({ pairs: initialPairs }: { pairs: DupePair[]
         <div>
           <h1 className="text-2xl font-semibold text-gray-900">Dedup Contacts</h1>
           <p className="text-gray-500 text-sm mt-0.5">
-            {pairs.length} duplicate pair{pairs.length !== 1 ? 's' : ''} remaining
+            {pairs.length} suspected duplicate pair{pairs.length !== 1 ? 's' : ''} remaining
             {mergedCount > 0 && ` · ${mergedCount} merged this session`}
           </p>
         </div>
@@ -207,179 +342,18 @@ export default function MergeWizard({ pairs: initialPairs }: { pairs: DupePair[]
           <Link href="/contacts" className="text-blue-600 hover:underline text-sm">← Back to contacts</Link>
         </div>
       ) : (
-        <div className="flex flex-col lg:flex-row gap-4 items-start">
-
-          {/* Pair list */}
-          <div className="w-full lg:w-64 shrink-0 bg-white rounded-xl border border-gray-200 overflow-hidden">
-            <div className="px-3 py-2 border-b bg-gray-50">
-              <p className="text-xs text-gray-500 font-medium uppercase tracking-wide">{pairs.length} suspected duplicates</p>
-              <p className="text-xs text-gray-400 mt-0.5">Click a row to review that pair</p>
-            </div>
-            <div className="divide-y divide-gray-100 max-h-[70vh] overflow-y-auto">
-              {pairs.map(pair => (
-                <button
-                  key={pair.key}
-                  onClick={() => openPair(pair)}
-                  className={`w-full text-left px-3 py-2.5 hover:bg-gray-50 transition-colors ${activePair?.key === pair.key ? 'bg-blue-50 border-l-2 border-blue-500' : ''}`}
-                >
-                  <div className="flex items-center gap-1.5 mb-0.5">
-                    <span className={`text-xs px-1.5 py-0.5 rounded font-medium ${pair.reason === 'email' ? 'bg-blue-100 text-blue-700' : 'bg-purple-100 text-purple-700'}`}>
-                      {pair.reason}
-                    </span>
-                  </div>
-                  <p className="text-sm font-medium text-gray-900 truncate">{pair.a.full_name || pair.a.email || '—'}</p>
-                  <p className="text-xs text-gray-400 truncate">{pair.b.full_name || pair.b.email || '—'}</p>
-                </button>
-              ))}
-            </div>
-          </div>
-
-          {/* Merge panel */}
-          <div className="flex-1 min-w-0">
-            {!activePair ? (
-              <div className="bg-white rounded-xl border border-gray-200 flex items-center justify-center py-24 text-gray-400 text-sm">
-                ← Select a pair to review
-              </div>
-            ) : (
-              <div className="bg-white rounded-xl border border-gray-200 p-5 space-y-5">
-
-                {/* Two contact cards */}
-                <div className="grid grid-cols-2 gap-3">
-                  {[activePair.a, activePair.b].map(contact => {
-                    const isPrimary = contact.id === primaryId
-                    return (
-                      <div key={contact.id} className={`rounded-lg border-2 p-3 transition-all ${isPrimary ? 'border-blue-400 bg-blue-50' : 'border-gray-200 bg-white'}`}>
-                        <div className="flex items-center justify-between mb-2">
-                          <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${isPrimary ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-500'}`}>
-                            {isPrimary ? '★ Primary' : 'Secondary'}
-                          </span>
-                          {!isPrimary && (
-                            <button onClick={() => flipPrimary(contact.id)} className="text-xs text-blue-600 hover:underline">
-                              Make primary
-                            </button>
-                          )}
-                        </div>
-                        <p className="font-semibold text-gray-900 truncate">{contact.full_name || '(no name)'}</p>
-                        <div className="mt-2 space-y-0.5">
-                          {[
-                            { label: 'Email',   value: contact.email },
-                            { label: 'Phone',   value: contact.phone },
-                            { label: 'Town',    value: contact.town },
-                            { label: 'State',   value: contact.state },
-                            { label: 'ZIP',     value: contact.zip },
-                            { label: 'Source',  value: contact.source },
-                            { label: 'Added',   value: contact.date_added },
-                            { label: 'Vol stage',   value: contact.volunteer_stage },
-                            { label: 'Donor stage', value: contact.donor_stage },
-                            { label: 'Discord', value: contact.discord_username },
-                          ].map(({ label, value }) => (
-                            <div key={label} className="flex gap-1.5 text-xs">
-                              <span className="text-gray-400 w-20 shrink-0">{label}</span>
-                              <span className={value ? 'text-gray-700' : 'text-gray-300'}>{value || '—'}</span>
-                            </div>
-                          ))}
-                          <div className="flex gap-1.5 text-xs pt-0.5 flex-wrap">
-                            {contact.is_volunteer && <span className="bg-gray-100 text-gray-600 rounded px-1">Vol</span>}
-                            {contact.is_donor && <span className="bg-gray-100 text-gray-600 rounded px-1">Donor</span>}
-                            {contact.is_signature_collector && <span className="bg-gray-100 text-gray-600 rounded px-1">Sig</span>}
-                            {contact.is_supporter && <span className="bg-gray-100 text-gray-600 rounded px-1">Supporter</span>}
-                            {contact.newsletter_subscriber && <span className="bg-gray-100 text-gray-600 rounded px-1">Newsletter</span>}
-                            {contact.do_not_contact && <span className="bg-red-100 text-red-600 rounded px-1">DNC</span>}
-                          </div>
-                          {contact.tags && contact.tags.length > 0 && (
-                            <p className="text-xs text-blue-600 truncate">{contact.tags.join(', ')}</p>
-                          )}
-                        </div>
-                      </div>
-                    )
-                  })}
-                </div>
-
-                {/* Conflicting fields */}
-                {conflicts.length > 0 && (
-                  <div>
-                    <p className="text-xs text-gray-400 font-medium uppercase tracking-wide mb-2">Conflicting fields — click to pick</p>
-                    <div className="space-y-1.5">
-                      {conflicts.map(({ key, label }) => {
-                        const aVal = String(activePair.a[key] ?? '')
-                        const bVal = String(activePair.b[key] ?? '')
-                        const choice = fieldChoices[key as string]
-                        const primaryChoice = primaryId === activePair.a.id ? 'a' : 'b'
-                        return (
-                          <div key={key as string} className="flex items-center gap-2 text-sm">
-                            <span className="text-gray-400 text-xs w-24 shrink-0">{label}</span>
-                            <button
-                              onClick={() => setFieldChoices(p => ({ ...p, [key as string]: 'a' }))}
-                              className={`px-2 py-1 rounded border text-xs flex-1 text-left truncate transition-colors ${
-                                choice === 'a' ? 'bg-blue-600 text-white border-blue-600' : 'bg-white border-gray-200 text-gray-600 hover:border-blue-300'
-                              }`}
-                            >
-                              {aVal} {primaryChoice === 'a' && <span className="opacity-60">(primary)</span>}
-                            </button>
-                            <button
-                              onClick={() => setFieldChoices(p => ({ ...p, [key as string]: 'b' }))}
-                              className={`px-2 py-1 rounded border text-xs flex-1 text-left truncate transition-colors ${
-                                choice === 'b' ? 'bg-blue-600 text-white border-blue-600' : 'bg-white border-gray-200 text-gray-600 hover:border-blue-300'
-                              }`}
-                            >
-                              {bVal} {primaryChoice === 'b' && <span className="opacity-60">(primary)</span>}
-                            </button>
-                          </div>
-                        )
-                      })}
-                    </div>
-                  </div>
-                )}
-
-                {/* Notes preview */}
-                {(activePair.a.notes || activePair.b.notes) && (
-                  <div>
-                    <p className="text-xs text-gray-400 font-medium uppercase tracking-wide mb-2">Notes (combined on merge)</p>
-                    <div className="grid grid-cols-2 gap-2">
-                      {[activePair.a, activePair.b].map(c => (
-                        <div key={c.id} className="text-xs text-gray-600 bg-gray-50 rounded p-2 max-h-24 overflow-y-auto whitespace-pre-wrap">
-                          {c.notes || <span className="text-gray-300 italic">empty</span>}
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
-
-                {/* Auto-merge summary */}
-                <div className="bg-gray-50 rounded-lg p-3 text-xs text-gray-500 space-y-1">
-                  <p className="font-medium text-gray-600 mb-1">Automatically handled:</p>
-                  <p>· All role flags are OR'd — no flag will be lost</p>
-                  <p>· Tags are combined into one set</p>
-                  <p>· Earliest date-added is kept</p>
-                  <p>· All actions and interactions move to the primary record</p>
-                  {hasDifferentEmails && (
-                    <p>· <span className="font-medium text-gray-700">{secondary?.email}</span> saved to alternative emails on the merged contact</p>
-                  )}
-                </div>
-
-                {error && <p className="text-red-600 text-sm">{error}</p>}
-
-                <div className="flex gap-3 pt-1">
-                  <button
-                    onClick={handleMerge}
-                    disabled={merging}
-                    className="bg-blue-600 text-white px-4 py-2 rounded-lg font-medium hover:bg-blue-700 disabled:opacity-50 transition-colors"
-                  >
-                    {merging ? 'Merging…' : 'Merge contacts'}
-                  </button>
-                  <button
-                    onClick={() => {
-                      setPairs(prev => prev.filter(p => p.key !== activePair.key))
-                      setActivePair(null)
-                    }}
-                    className="px-4 py-2 rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-50 transition-colors"
-                  >
-                    Not duplicates
-                  </button>
-                </div>
-              </div>
-            )}
-          </div>
+        <div className="space-y-2">
+          <p className="text-xs text-gray-400">Click <strong>Review</strong> on any row to compare and merge, or <strong>Not duplicates</strong> to dismiss.</p>
+          {pairs.map(pair => (
+            <PairRow
+              key={pair.key}
+              pair={pair}
+              onDismiss={() => {
+                dismiss(pair.key)
+                setMergedCount(n => n) // no increment for dismissals
+              }}
+            />
+          ))}
         </div>
       )}
     </div>
