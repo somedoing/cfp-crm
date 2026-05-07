@@ -19,8 +19,7 @@ const CLOSED_STATUSES = ['Done','Committed','Declined','Unresponsive','Dropped',
 
 const STATUS_COLORS: Record<string, string> = {
   'Needs Review':     'bg-gray-100 text-gray-600',
-  'Ready to Contact': 'bg-blue-100 text-blue-700',
-  'Assigned to Jon':  'bg-purple-100 text-purple-700',
+  'To Contact':       'bg-blue-100 text-blue-700',
   'Contacted':        'bg-yellow-100 text-yellow-700',
   'Follow-up':        'bg-orange-100 text-orange-700',
   'Positive Response':'bg-green-100 text-green-700',
