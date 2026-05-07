@@ -235,7 +235,7 @@ export default function ContactDetail({
 
       {/* Header card */}
       <div className="bg-white rounded-xl border border-gray-200 p-6">
-        <div className="flex items-start justify-between gap-4 mb-4">
+        <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-2 mb-4">
           <div className="flex items-center gap-2 flex-wrap">
             <h1 className="text-2xl font-semibold text-gray-900">{displayName}</h1>
             {initial.display_id && (
@@ -257,7 +257,7 @@ export default function ContactDetail({
         </div>
 
         {/* Editable basic info */}
-        <div className="grid grid-cols-2 gap-2">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
           <Input placeholder="First name" value={firstName} onChange={e => setFirstName(e.target.value)} className="h-8 text-sm" />
           <Input placeholder="Last name" value={lastName} onChange={e => setLastName(e.target.value)} className="h-8 text-sm" />
           <Input placeholder="Email" type="email" value={email} onChange={e => setEmail(e.target.value)} className="h-8 text-sm" />
@@ -295,7 +295,7 @@ export default function ContactDetail({
         </div>
 
         {/* Editable stages row */}
-        <div className="grid grid-cols-3 gap-3 mt-5 pt-4 border-t">
+        <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 mt-5 pt-4 border-t">
           <div className="space-y-1">
             <label className="text-xs text-gray-400 font-medium uppercase tracking-wide">Volunteer stage</label>
             <Select value={volunteerStage} onValueChange={handleVolunteerStage}>
@@ -357,21 +357,18 @@ export default function ContactDetail({
           </h2>
           <div className="space-y-2">
             {openActions.map(action => (
-              <div key={action.id} className="bg-white rounded-lg border border-gray-200 px-4 py-3 flex items-center gap-3">
-                <span className={`px-2 py-0.5 rounded text-xs font-medium ${STATUS_COLORS[action.status] ?? 'bg-gray-100 text-gray-600'}`}>
-                  {action.status}
-                </span>
-                <span className="text-gray-800 flex-1 text-sm">{action.title}</span>
-                <span className="text-gray-400 text-sm">{action.action_type}</span>
-                {action.due_date && (
-                  <span className="text-gray-400 text-sm">Due {action.due_date}</span>
-                )}
-                <Link
-                  href={`/actions/${action.id}`}
-                  className="text-gray-400 hover:text-blue-600 text-sm"
-                >
-                  Edit →
-                </Link>
+              <div key={action.id} className="bg-white rounded-lg border border-gray-200 px-4 py-3 space-y-1">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className={`px-2 py-0.5 rounded text-xs font-medium ${STATUS_COLORS[action.status] ?? 'bg-gray-100 text-gray-600'}`}>
+                    {action.status}
+                  </span>
+                  <span className="text-gray-400 text-xs">{action.action_type}</span>
+                  {action.due_date && (
+                    <span className="text-gray-400 text-xs">Due {action.due_date}</span>
+                  )}
+                  <Link href={`/actions/${action.id}`} className="text-gray-400 hover:text-blue-600 text-xs ml-auto">Edit →</Link>
+                </div>
+                <p className="text-gray-800 text-sm">{action.title}</p>
               </div>
             ))}
           </div>
@@ -381,7 +378,7 @@ export default function ContactDetail({
       {/* Log interaction */}
       <div className="bg-white rounded-xl border border-gray-200 p-5 space-y-3">
         <h2 className="font-semibold text-gray-800">Log interaction</h2>
-        <div className="grid grid-cols-3 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
           <div className="space-y-1">
             <label className="text-xs text-gray-400">Type</label>
             <Select value={intType} onValueChange={v => v && setIntType(v)}>

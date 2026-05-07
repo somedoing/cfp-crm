@@ -93,7 +93,7 @@ export default function NewContactForm() {
         </CardHeader>
         <CardContent className="space-y-4">
           {/* Name */}
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div className="space-y-1">
               <Label>First name</Label>
               <Input value={firstName} onChange={e => setFirstName(e.target.value)} placeholder="First" autoFocus />
@@ -105,7 +105,7 @@ export default function NewContactForm() {
           </div>
 
           {/* Contact info */}
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div className="space-y-1">
               <Label>Email</Label>
               <Input type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="email@example.com" />
@@ -131,7 +131,7 @@ export default function NewContactForm() {
           </div>
 
           {/* Source + priority */}
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div className="space-y-1">
               <Label>Source</Label>
               <Select value={source} onValueChange={v => v && setSource(v)}>

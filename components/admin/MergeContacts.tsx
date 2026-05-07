@@ -190,7 +190,7 @@ export default function MergeContacts({ primary }: { primary: Contact }) {
       ) : (
         /* Comparison + confirm step */
         <div className="space-y-4">
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             {/* Primary */}
             <div className="bg-white rounded-xl border-2 border-blue-200 p-4">
               <div className="flex items-center gap-2 mb-3">
@@ -225,7 +225,8 @@ export default function MergeContacts({ primary }: { primary: Contact }) {
           {/* Field comparison */}
           <div className="bg-white rounded-xl border border-gray-200 p-4">
             <p className="text-xs font-medium text-gray-400 uppercase tracking-wide mb-3">Field comparison</p>
-            <table className="w-full">
+            <div className="overflow-x-auto">
+            <table className="w-full min-w-[400px]">
               <thead>
                 <tr className="border-b border-gray-100">
                   <td className="pb-2 text-xs text-gray-400 w-32"></td>
@@ -246,6 +247,7 @@ export default function MergeContacts({ primary }: { primary: Contact }) {
                 <Field label="Notes" primary={primary.notes} secondary={secondary.notes} />
               </tbody>
             </table>
+            </div>
             <p className="text-xs text-gray-400 mt-3">
               Boolean flags (volunteer, donor, press, etc.) are merged with OR — if either contact has a flag set, the merged contact keeps it.
               All actions and interaction history from the duplicate will be moved to the surviving contact.
