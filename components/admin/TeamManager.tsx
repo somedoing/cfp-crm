@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useTransition } from 'react'
-import { inviteUser, updateUserRole } from '@/app/(admin)/team/actions'
+import { createUser, updateUserRole } from '@/app/(admin)/team/actions'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -19,25 +19,30 @@ export default function TeamManager({ profiles: initial }: { profiles: Profile[]
   const [profiles, setProfiles] = useState(initial)
   const [email, setEmail] = useState('')
   const [fullName, setFullName] = useState('')
+  const [password, setPassword] = useState('')
   const [role, setRole] = useState<'admin' | 'sender'>('sender')
-  const [inviteError, setInviteError] = useState('')
-  const [inviteSuccess, setInviteSuccess] = useState('')
+  const [error, setError] = useState('')
+  const [success, setSuccess] = useState('')
   const [isPending, startTransition] = useTransition()
   const [updatingId, setUpdatingId] = useState<string | null>(null)
 
-  function handleInvite() {
-    if (!email.trim()) return
-    setInviteError('')
-    setInviteSuccess('')
+  function handleCreate() {
+    if (!email.trim() || !password.trim()) return
+    setError('')
+    setSuccess('')
     startTransition(async () => {
-      const result = await inviteUser(email.trim(), fullName.trim(), role)
+      const result = await createUser(email.trim(), fullName.trim(), password, role)
       if (result.error) {
-        setInviteError(result.error)
+        setError(result.error)
       } else {
-        setInviteSuccess(`Invite sent to ${email}`)
+        setSuccess(`${email} added — they can log in now.`)
         setEmail('')
         setFullName('')
+        setPassword('')
         setRole('sender')
+        if (result.profile) {
+          setProfiles(prev => [...prev, result.profile!])
+        }
       }
     })
   }
@@ -76,7 +81,7 @@ export default function TeamManager({ profiles: initial }: { profiles: Profile[]
                       ? 'bg-blue-100 text-blue-700 border-blue-200'
                       : 'bg-gray-100 text-gray-600 border-gray-200'}
                   >
-                    {profile.role === 'admin' ? 'Admin' : 'Candidate'}
+                    {profile.role === 'admin' ? 'Admin' : 'Sender'}
                   </Badge>
                   <button
                     onClick={() => handleRoleChange(
@@ -100,10 +105,10 @@ export default function TeamManager({ profiles: initial }: { profiles: Profile[]
         </CardContent>
       </Card>
 
-      {/* Invite form */}
+      {/* Add user form */}
       <Card>
         <CardHeader className="pb-3">
-          <CardTitle>Invite someone</CardTitle>
+          <CardTitle>Add team member</CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="grid grid-cols-2 gap-3">
@@ -114,7 +119,6 @@ export default function TeamManager({ profiles: initial }: { profiles: Profile[]
                 value={email}
                 onChange={e => setEmail(e.target.value)}
                 placeholder="person@example.com"
-                onKeyDown={e => e.key === 'Enter' && handleInvite()}
               />
             </div>
             <div className="space-y-1">
@@ -128,8 +132,19 @@ export default function TeamManager({ profiles: initial }: { profiles: Profile[]
           </div>
 
           <div className="space-y-1">
+            <Label>Password *</Label>
+            <Input
+              type="password"
+              value={password}
+              onChange={e => setPassword(e.target.value)}
+              placeholder="Set a password for them"
+              onKeyDown={e => e.key === 'Enter' && handleCreate()}
+            />
+          </div>
+
+          <div className="space-y-1">
             <Label>Role</Label>
-            <div className="flex gap-3 mt-1">
+            <div className="flex gap-4 mt-1">
               {(['sender', 'admin'] as const).map(r => (
                 <label key={r} className="flex items-center gap-2 cursor-pointer">
                   <input
@@ -150,15 +165,15 @@ export default function TeamManager({ profiles: initial }: { profiles: Profile[]
           </div>
 
           <div className="flex items-center gap-3">
-            <Button onClick={handleInvite} disabled={isPending || !email.trim()}>
-              {isPending ? 'Sending…' : 'Send invite'}
+            <Button
+              onClick={handleCreate}
+              disabled={isPending || !email.trim() || !password.trim()}
+            >
+              {isPending ? 'Creating…' : 'Add user'}
             </Button>
-            {inviteSuccess && <span className="text-green-600 text-sm">{inviteSuccess}</span>}
+            {success && <span className="text-green-600 text-sm">{success}</span>}
           </div>
-          {inviteError && <p className="text-red-600 text-sm">{inviteError}</p>}
-          <p className="text-gray-400 text-xs">
-            They'll get an email with a link to set their password and log in.
-          </p>
+          {error && <p className="text-red-600 text-sm">{error}</p>}
         </CardContent>
       </Card>
     </div>

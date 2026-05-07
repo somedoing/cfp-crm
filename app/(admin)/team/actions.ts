@@ -3,27 +3,39 @@
 import { createAdminClient } from '@/lib/supabase/admin'
 import { revalidatePath } from 'next/cache'
 
-export async function inviteUser(email: string, fullName: string, role: string) {
+export async function createUser(email: string, fullName: string, password: string, role: string) {
   const admin = createAdminClient()
 
-  const { data, error } = await admin.auth.admin.inviteUserByEmail(email, {
-    data: { full_name: fullName || email, role },
+  const { data, error } = await admin.auth.admin.createUser({
+    email,
+    password,
+    email_confirm: true,
+    user_metadata: { full_name: fullName || email, role },
   })
 
   if (error) return { error: error.message }
 
-  // Upsert profile with the correct role (the trigger may create it with default 'sender')
+  // Upsert profile with the correct role
   if (data.user) {
-    await admin.from('profiles').upsert({
+    const { error: profileError } = await admin.from('profiles').upsert({
       id: data.user.id,
       email,
       full_name: fullName || email,
       role,
     })
+    if (profileError) return { error: profileError.message }
   }
 
   revalidatePath('/team')
-  return { success: true }
+  return {
+    success: true,
+    profile: {
+      id: data.user!.id,
+      email,
+      full_name: fullName || email,
+      role: role as 'admin' | 'sender',
+    },
+  }
 }
 
 export async function updateUserRole(userId: string, role: string) {
