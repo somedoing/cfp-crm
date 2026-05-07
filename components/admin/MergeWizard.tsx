@@ -157,11 +157,6 @@ export default function MergeWizard({ pairs: initialPairs }: { pairs: DupePair[]
     mergedData.alternative_emails = [...new Set(altEmails.filter(Boolean))]
     mergedData.email = primary.email
 
-    // full_name: rebuild from chosen first/last
-    const fn = (mergedData.first_name as string || '').trim()
-    const ln = (mergedData.last_name as string || '').trim()
-    mergedData.full_name = [fn, ln].filter(Boolean).join(' ') || primary.full_name
-
     const result = await mergeContacts({ primaryId: primary.id, secondaryId: secondary.id, mergedData })
 
     if ('error' in result && result.error) {
