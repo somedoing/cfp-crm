@@ -457,7 +457,19 @@ const WizardCard = forwardRef<WizardCardHandle, {
   const [zip, setZip] = useState(contact.zip ?? '')
   const [notes, setNotes] = useState(contact.notes ?? '')
   const [tags, setTags] = useState<string[]>(contact.tags ?? [])
+  const [donations, setDonations] = useState<{ id: string; interaction_date: string | null; summary: string | null }[]>([])
   const [saving, setSaving] = useState(false)
+
+  useEffect(() => {
+    if (!contact.is_donor) { setDonations([]); return }
+    supabase
+      .from('interactions')
+      .select('id, interaction_date, summary')
+      .eq('contact_id', contact.id)
+      .eq('interaction_type', 'Donation')
+      .order('interaction_date', { ascending: false })
+      .then(({ data }) => setDonations(data ?? []))
+  }, [contact.id])
 
   async function addTag(tag: string) {
     const next = [...new Set([...tags, tag])]
@@ -620,6 +632,21 @@ const WizardCard = forwardRef<WizardCardHandle, {
           )}
         </div>
       </div>
+
+      {/* Donation history */}
+      {contact.is_donor && (
+        <div className="rounded-lg bg-green-50 border border-green-100 px-3 py-2">
+          <p className="text-xs font-medium text-green-700 mb-1">Donation history</p>
+          {donations.length === 0
+            ? <p className="text-xs text-green-600">Marked as donor — no detailed records</p>
+            : donations.map(d => (
+                <p key={d.id} className="text-xs text-green-800">
+                  {d.interaction_date ?? '—'} · {d.summary}
+                </p>
+              ))
+          }
+        </div>
+      )}
 
       {/* Stages */}
       <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">

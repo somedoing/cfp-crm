@@ -266,10 +266,16 @@ function applyFieldMap(row: ParsedRow, fieldMap: FieldMap, sourceForm: string): 
         if (val.length > 3) contact.text_opt_in = true
         break
       case 'donation_count':
-        if (parseInt(val) > 0) { contact.is_donor = true; contact.donor_stage = 'Donated'; contact.is_supporter = true }
+        if (parseInt(val) > 0) {
+          contact.is_donor = true; contact.donor_stage = 'Donated'; contact.is_supporter = true
+          contact._donation_count = parseInt(val)
+        }
         break
       case 'donation_amount':
-        if (parseFloat(val) > 0) { contact.is_donor = true; contact.donor_stage = 'Donated'; contact.is_supporter = true }
+        if (parseFloat(val) > 0) {
+          contact.is_donor = true; contact.donor_stage = 'Donated'; contact.is_supporter = true
+          contact._donation_amount = parseFloat(val)
+        }
         break
       case 'date_added': {
         const parsed = new Date(val)
@@ -406,6 +412,10 @@ export default function ImportUploader() {
 
       const contactData = applyFieldMap(row.data, fieldMap, sourceForm)
       const firstName = (contactData.first_name as string) ?? ''
+      const donationCount = contactData._donation_count as number | undefined
+      const donationAmount = contactData._donation_amount as number | undefined
+      delete contactData._donation_count
+      delete contactData._donation_amount
 
       let contactId: string
       if (row._action === 'merge' && row._match) {
@@ -449,6 +459,32 @@ export default function ImportUploader() {
         const { data: newContact } = await supabase.from('contacts').insert(contactData).select('id').single()
         if (!newContact) continue
         contactId = newContact.id
+      }
+
+      // Log donation interaction if donation data present
+      if (donationCount || donationAmount) {
+        let shouldLog = row._action === 'create'
+        if (row._action === 'merge') {
+          const { count } = await supabase
+            .from('interactions')
+            .select('id', { count: 'exact', head: true })
+            .eq('contact_id', contactId)
+            .eq('interaction_type', 'Donation')
+          shouldLog = (count ?? 0) === 0
+        }
+        if (shouldLog) {
+          const parts: string[] = []
+          if (donationCount) parts.push(`${donationCount} donation${donationCount !== 1 ? 's' : ''}`)
+          if (donationAmount) parts.push(`$${donationAmount.toFixed(2)} total`)
+          await supabase.from('interactions').insert({
+            contact_id: contactId,
+            interaction_type: 'Donation',
+            direction: 'Inbound',
+            interaction_date: (contactData.date_added as string) || new Date().toISOString().split('T')[0],
+            summary: parts.join(' — '),
+            notes: `From ${sourceForm} import`,
+          })
+        }
       }
 
       // Generate actions for new contacts only (if enabled)
