@@ -176,7 +176,6 @@ export default function MergeWizard({ pairs: initialPairs }: { pairs: DupePair[]
     setMerging(false)
   }
 
-  const isPrimaryA = activePair?.id ? false : activePair ? primaryId === activePair.a.id : true
   const primary = activePair ? (primaryId === activePair.a.id ? activePair.a : activePair.b) : null
   const secondary = activePair ? (primaryId === activePair.a.id ? activePair.b : activePair.a) : null
 
