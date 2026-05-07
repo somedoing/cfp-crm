@@ -155,7 +155,7 @@ export default function ActionEditor({ action }: { action: any }) {
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="admin">Admin</SelectItem>
-                  <SelectItem value="candidate">Jon (candidate)</SelectItem>
+                  <SelectItem value="sender">Sender</SelectItem>
                 </SelectContent>
               </Select>
             </div>

@@ -1,5 +1,5 @@
 import { createClient } from '@/lib/supabase/server'
-import OutreachCard from '@/components/candidate/OutreachCard'
+import OutreachCard from '@/components/sender/OutreachCard'
 
 export default async function OutreachPage() {
   const supabase = await createClient()

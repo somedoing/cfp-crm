@@ -12,7 +12,7 @@ export async function inviteUser(email: string, fullName: string, role: string) 
 
   if (error) return { error: error.message }
 
-  // Upsert profile with the correct role (the trigger may create it with default 'candidate')
+  // Upsert profile with the correct role (the trigger may create it with default 'sender')
   if (data.user) {
     await admin.from('profiles').upsert({
       id: data.user.id,

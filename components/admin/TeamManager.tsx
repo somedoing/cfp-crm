@@ -12,14 +12,14 @@ type Profile = {
   id: string
   email: string
   full_name: string | null
-  role: 'admin' | 'candidate'
+  role: 'admin' | 'sender'
 }
 
 export default function TeamManager({ profiles: initial }: { profiles: Profile[] }) {
   const [profiles, setProfiles] = useState(initial)
   const [email, setEmail] = useState('')
   const [fullName, setFullName] = useState('')
-  const [role, setRole] = useState<'admin' | 'candidate'>('candidate')
+  const [role, setRole] = useState<'admin' | 'sender'>('sender')
   const [inviteError, setInviteError] = useState('')
   const [inviteSuccess, setInviteSuccess] = useState('')
   const [isPending, startTransition] = useTransition()
@@ -37,12 +37,12 @@ export default function TeamManager({ profiles: initial }: { profiles: Profile[]
         setInviteSuccess(`Invite sent to ${email}`)
         setEmail('')
         setFullName('')
-        setRole('candidate')
+        setRole('sender')
       }
     })
   }
 
-  async function handleRoleChange(userId: string, newRole: 'admin' | 'candidate') {
+  async function handleRoleChange(userId: string, newRole: 'admin' | 'sender') {
     setUpdatingId(userId)
     const result = await updateUserRole(userId, newRole)
     if (!result.error) {
@@ -81,14 +81,14 @@ export default function TeamManager({ profiles: initial }: { profiles: Profile[]
                   <button
                     onClick={() => handleRoleChange(
                       profile.id,
-                      profile.role === 'admin' ? 'candidate' : 'admin'
+                      profile.role === 'admin' ? 'sender' : 'admin'
                     )}
                     disabled={updatingId === profile.id}
                     className="text-gray-400 hover:text-gray-700 text-sm disabled:opacity-40"
                   >
                     {updatingId === profile.id
                       ? 'Saving…'
-                      : `Make ${profile.role === 'admin' ? 'candidate' : 'admin'}`}
+                      : `Make ${profile.role === 'admin' ? 'sender' : 'admin'}`}
                   </button>
                 </div>
               </div>
@@ -130,7 +130,7 @@ export default function TeamManager({ profiles: initial }: { profiles: Profile[]
           <div className="space-y-1">
             <Label>Role</Label>
             <div className="flex gap-3 mt-1">
-              {(['candidate', 'admin'] as const).map(r => (
+              {(['sender', 'admin'] as const).map(r => (
                 <label key={r} className="flex items-center gap-2 cursor-pointer">
                   <input
                     type="radio"

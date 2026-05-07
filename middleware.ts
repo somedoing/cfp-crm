@@ -38,7 +38,7 @@ export async function middleware(request: NextRequest) {
     return NextResponse.redirect(new URL('/login', request.url))
   }
 
-  // Candidate can only access /outreach
+  // Senders can only access /outreach
   if (pathname.startsWith('/dashboard') || pathname.startsWith('/contacts') || pathname.startsWith('/actions') || pathname.startsWith('/imports')) {
     const { data: profile } = await supabase
       .from('profiles')
@@ -46,7 +46,7 @@ export async function middleware(request: NextRequest) {
       .eq('id', user.id)
       .single()
 
-    if (profile?.role === 'candidate') {
+    if (profile?.role === 'sender') {
       return NextResponse.redirect(new URL('/outreach', request.url))
     }
   }

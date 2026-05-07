@@ -35,7 +35,7 @@ export default function LoginPage() {
       .eq('id', data.user.id)
       .single()
 
-    if (profile?.role === 'candidate') {
+    if (profile?.role === 'sender') {
       router.push('/outreach')
     } else {
       router.push('/dashboard')

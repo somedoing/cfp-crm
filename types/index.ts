@@ -1,4 +1,4 @@
-export type Role = 'admin' | 'candidate'
+export type Role = 'admin' | 'sender'
 
 export type Profile = {
   id: string
@@ -65,7 +65,7 @@ export type Action = {
   suggested_ask: string
   suggested_message: string
   owner: string
-  assigned_to: 'admin' | 'candidate'
+  assigned_to: 'admin' | 'sender'
   priority: string
   status: string
   due_date: string

@@ -26,7 +26,7 @@ export default async function DashboardPage() {
     supabase.from('contacts').select('*', { count: 'exact', head: true })
       .eq('discord_stage', 'Should invite'),
     supabase.from('actions').select('*', { count: 'exact', head: true })
-      .eq('assigned_to', 'candidate').not('status', 'in', '("Done","Dropped","Skipped")'),
+      .eq('assigned_to', 'sender').not('status', 'in', '("Done","Dropped","Skipped")'),
     supabase.from('actions')
       .select('*, contact:contacts(full_name, display_id)')
       .not('status', 'in', '("Done","Dropped","Skipped")')
@@ -40,7 +40,7 @@ export default async function DashboardPage() {
     { label: 'New Volunteer Leads', value: uncontactedVolunteers ?? 0, href: '/contacts?volunteer_stage=New', urgent: false },
     { label: 'Donors Need Thank-You', value: needsThankYou ?? 0, href: '/contacts?donor_stage=Donated', urgent: (needsThankYou ?? 0) > 0 },
     { label: 'Discord Invites Needed', value: shouldInviteDiscord ?? 0, href: '/contacts?discord_stage=Should+invite', urgent: false },
-    { label: "Candidate's Queue", value: candidateQueue ?? 0, href: '/actions?assigned_to=candidate', urgent: false },
+    { label: "Sender Queue", value: candidateQueue ?? 0, href: '/actions?assigned_to=sender', urgent: false },
   ]
 
   return (
@@ -97,8 +97,8 @@ export default async function DashboardPage() {
                         {action.due_date < today ? 'Overdue' : action.due_date}
                       </span>
                     )}
-                    <Badge variant={action.assigned_to === 'candidate' ? 'default' : 'secondary'}>
-                      {action.assigned_to === 'candidate' ? 'Candidate' : 'Admin'}
+                    <Badge variant={action.assigned_to === 'sender' ? 'default' : 'secondary'}>
+                      {action.assigned_to === 'sender' ? 'Sender' : 'Admin'}
                     </Badge>
                   </div>
                 </div>

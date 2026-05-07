@@ -29,7 +29,7 @@ type Interaction = {
   created_at: string
 }
 
-export default function CandidateContactView({
+export default function SenderContactView({
   contact,
   interactions: initialInteractions,
 }: {
@@ -56,7 +56,7 @@ export default function CandidateContactView({
         interaction_type: 'Internal note',
         direction: 'Outbound',
         interaction_date: today,
-        owner: 'candidate',
+        owner: 'sender',
         summary: note.trim(),
       })
       .select('id, interaction_date, interaction_type, direction, summary, notes, created_at')

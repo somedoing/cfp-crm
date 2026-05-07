@@ -1,8 +1,8 @@
 import { createClient } from '@/lib/supabase/server'
 import { notFound } from 'next/navigation'
-import CandidateContactView from '@/components/candidate/CandidateContactView'
+import SenderContactView from '@/components/sender/SenderContactView'
 
-export default async function CandidateContactPage({ params }: { params: Promise<{ id: string }> }) {
+export default async function SenderContactPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
   const supabase = await createClient()
 
@@ -23,7 +23,7 @@ export default async function CandidateContactPage({ params }: { params: Promise
   if (!contact) notFound()
 
   return (
-    <CandidateContactView
+    <SenderContactView
       contact={contact as any}
       interactions={(interactions ?? []) as any}
     />
