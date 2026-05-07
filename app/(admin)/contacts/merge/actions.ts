@@ -46,11 +46,12 @@ export async function mergeContacts({
     }
   }
 
-  const { error: deleteErr } = await admin
+  const { error: deleteErr, count } = await admin
     .from('contacts')
-    .delete()
+    .delete({ count: 'exact' })
     .eq('id', secondaryId)
   if (deleteErr) return { error: `Failed to delete duplicate: ${deleteErr.message}` }
+  if (count === 0) return { error: `Delete matched 0 rows — contact ${secondaryId} may already be deleted or a trigger is blocking it` }
 
   revalidatePath('/contacts')
   revalidatePath('/contacts/merge')

@@ -364,10 +364,13 @@ export default function MergeWizard({ pairs: initialPairs }: { pairs: DupePair[]
                     {merging ? 'Merging…' : 'Merge contacts'}
                   </button>
                   <button
-                    onClick={() => setActivePair(null)}
+                    onClick={() => {
+                      setPairs(prev => prev.filter(p => p.key !== activePair.key))
+                      setActivePair(null)
+                    }}
                     className="px-4 py-2 rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-50 transition-colors"
                   >
-                    Skip
+                    Not duplicates
                   </button>
                 </div>
               </div>
