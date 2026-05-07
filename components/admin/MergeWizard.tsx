@@ -76,20 +76,12 @@ const BOOL_FLAGS: (keyof Contact)[] = [
 
 async function fetchAllContacts(): Promise<Contact[]> {
   const supabase = createClient()
-  const all: Contact[] = []
-  let page = 0
-  while (true) {
-    const { data } = await supabase
-      .from('contacts')
-      .select(FIELDS)
-      .order('id', { ascending: true })
-      .range(page * 1000, (page + 1) * 1000 - 1)
-    if (!data || data.length === 0) break
-    all.push(...(data as Contact[]))
-    if (data.length < 1000) break
-    page++
-  }
-  return all
+  const { data } = await supabase
+    .from('contacts')
+    .select(FIELDS)
+    .order('id', { ascending: true })
+    .range(0, 9999)
+  return (data as Contact[]) ?? []
 }
 
 function computePairs(contacts: Contact[]): DupePair[] {
