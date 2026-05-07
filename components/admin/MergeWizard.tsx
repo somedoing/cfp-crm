@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import Link from 'next/link'
+import { useRouter } from 'next/navigation'
 import { mergeContacts } from '@/app/(admin)/contacts/merge/actions'
 
 type Contact = {
@@ -81,6 +82,7 @@ function defaultChoices(a: Contact, b: Contact): Record<string, 'a' | 'b'> {
 }
 
 export default function MergeWizard({ pairs: initialPairs }: { pairs: DupePair[] }) {
+  const router = useRouter()
   const [pairs, setPairs] = useState(initialPairs)
   const [activePair, setActivePair] = useState<DupePair | null>(null)
   const [primaryId, setPrimaryId] = useState('')
@@ -169,6 +171,7 @@ export default function MergeWizard({ pairs: initialPairs }: { pairs: DupePair[]
     setMergedCount(n => n + 1)
     setActivePair(null)
     setMerging(false)
+    router.refresh()
   }
 
   const primary = activePair ? (primaryId === activePair.a.id ? activePair.a : activePair.b) : null
@@ -208,8 +211,9 @@ export default function MergeWizard({ pairs: initialPairs }: { pairs: DupePair[]
 
           {/* Pair list */}
           <div className="w-full lg:w-64 shrink-0 bg-white rounded-xl border border-gray-200 overflow-hidden">
-            <div className="px-3 py-2 border-b bg-gray-50 text-xs text-gray-500 font-medium uppercase tracking-wide">
-              {pairs.length} pairs
+            <div className="px-3 py-2 border-b bg-gray-50">
+              <p className="text-xs text-gray-500 font-medium uppercase tracking-wide">{pairs.length} suspected duplicates</p>
+              <p className="text-xs text-gray-400 mt-0.5">Click a row to review that pair</p>
             </div>
             <div className="divide-y divide-gray-100 max-h-[70vh] overflow-y-auto">
               {pairs.map(pair => (
