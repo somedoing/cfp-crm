@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import Link from 'next/link'
 import type { Action } from '@/types'
 
 type Props = {
@@ -84,7 +85,13 @@ export default function OutreachCard({ action }: Props) {
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
             <div className="flex items-center gap-2 flex-wrap">
-              <span className="font-semibold text-gray-900">{action.contact.full_name}</span>
+              <Link
+                href={`/outreach/contacts/${action.contact_id}`}
+                className="font-semibold text-gray-900 hover:text-blue-600"
+                onClick={e => e.stopPropagation()}
+              >
+                {action.contact.full_name}
+              </Link>
               <Badge variant={priorityColor as any}>{action.priority}</Badge>
               <Badge variant="outline">{action.action_type}</Badge>
             </div>

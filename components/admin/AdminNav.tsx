@@ -11,6 +11,7 @@ const navItems = [
   { href: '/organizations', label: 'Orgs' },
   { href: '/actions', label: 'Pipeline' },
   { href: '/imports', label: 'Imports' },
+  { href: '/team', label: 'Team' },
 ]
 
 export default function AdminNav({ userEmail }: { userEmail: string }) {
