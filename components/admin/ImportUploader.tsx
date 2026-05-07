@@ -323,6 +323,7 @@ export default function ImportUploader() {
   const [loading, setLoading] = useState(false)
   const [filename, setFilename] = useState('')
   const [processedCount, setProcessedCount] = useState(0)
+  const [autoActions, setAutoActions] = useState(true)
 
   function reset() {
     setStep('upload'); setRows([]); setHeaders([]); setFieldMap({})
@@ -429,8 +430,8 @@ export default function ImportUploader() {
         contactId = newContact.id
       }
 
-      // Generate actions for new contacts only
-      if (row._action === 'create') {
+      // Generate actions for new contacts only (if enabled)
+      if (autoActions && row._action === 'create') {
         const dateAdded = contactData.date_added ? new Date(contactData.date_added as string) : null
         const now = new Date()
         const daysSince = dateAdded ? Math.floor((now.getTime() - dateAdded.getTime()) / 86400000) : null
@@ -664,6 +665,16 @@ export default function ImportUploader() {
             </SelectContent>
           </Select>
         </div>
+        <label className="flex items-center gap-2 cursor-pointer select-none">
+          <input
+            type="checkbox"
+            checked={autoActions}
+            onChange={e => setAutoActions(e.target.checked)}
+            className="rounded"
+          />
+          <span className="text-sm text-gray-700">Auto-create pipeline actions for new contacts</span>
+        </label>
+
         <Button
           onClick={() => setStep('mapping')}
           disabled={!rows.length || !sourceForm}
