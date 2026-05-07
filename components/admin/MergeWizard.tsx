@@ -82,7 +82,7 @@ async function fetchAllContacts(): Promise<Contact[]> {
     const { data } = await supabase
       .from('contacts')
       .select(FIELDS)
-      .order('date_added', { ascending: true, nullsFirst: true })
+      .order('id', { ascending: true })
       .range(page * 1000, (page + 1) * 1000 - 1)
     if (!data || data.length === 0) break
     all.push(...(data as Contact[]))
@@ -346,6 +346,8 @@ export default function MergeWizard() {
   const [pairs, setPairs] = useState<DupePair[]>([])
   const [loading, setLoading] = useState(true)
   const [mergedCount, setMergedCount] = useState(0)
+  const [bulkMerging, setBulkMerging] = useState(false)
+  const [bulkProgress, setBulkProgress] = useState('')
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -355,6 +357,52 @@ export default function MergeWizard() {
   }, [])
 
   useEffect(() => { load() }, [load])
+
+  // Identical pairs: same email, same (or both empty) first+last name
+  const identicalPairs = pairs.filter(p =>
+    p.reason === 'email' &&
+    p.a.email === p.b.email &&
+    (p.a.first_name ?? '').toLowerCase().trim() === (p.b.first_name ?? '').toLowerCase().trim() &&
+    (p.a.last_name ?? '').toLowerCase().trim() === (p.b.last_name ?? '').toLowerCase().trim()
+  )
+
+  async function mergeAllIdentical() {
+    if (!identicalPairs.length) return
+    setBulkMerging(true)
+    let done = 0
+    const keys = new Set<string>()
+    for (const pair of identicalPairs) {
+      setBulkProgress(`Merging ${done + 1} of ${identicalPairs.length}…`)
+      const { a, b } = pair
+      // Keep whichever has more data (non-null fields), defaulting to a
+      const primary = a
+      const secondary = b
+      const mergedData: Record<string, unknown> = {}
+      for (const { key } of CHOICE_FIELDS) {
+        mergedData[key as string] = (primary[key] || secondary[key]) || null
+      }
+      for (const flag of BOOL_FLAGS) {
+        mergedData[flag as string] = !!(primary[flag] || secondary[flag])
+      }
+      mergedData.tags = [...new Set([...(primary.tags ?? []), ...(secondary.tags ?? [])])]
+      if (primary.date_added && secondary.date_added) {
+        mergedData.date_added = primary.date_added < secondary.date_added ? primary.date_added : secondary.date_added
+      } else {
+        mergedData.date_added = primary.date_added || secondary.date_added
+      }
+      mergedData.notes = primary.notes || secondary.notes || null
+      mergedData.alternative_emails = [...new Set([...(primary.alternative_emails ?? []), ...(secondary.alternative_emails ?? [])].filter(Boolean))]
+      mergedData.email = primary.email
+      try {
+        const result = await mergeContacts({ primaryId: primary.id, secondaryId: secondary.id, mergedData })
+        if (!result.error) { done++; keys.add(pair.key) }
+      } catch { /* skip failed */ }
+    }
+    setPairs(prev => prev.filter(p => !keys.has(p.key)))
+    setMergedCount(n => n + done)
+    setBulkMerging(false)
+    setBulkProgress('')
+  }
 
   if (loading) {
     return (
@@ -374,7 +422,16 @@ export default function MergeWizard() {
             {mergedCount > 0 && ` · ${mergedCount} merged this session`}
           </p>
         </div>
-        <div className="flex items-center gap-4">
+        <div className="flex items-center gap-3">
+          {identicalPairs.length > 0 && (
+            <button
+              onClick={mergeAllIdentical}
+              disabled={bulkMerging}
+              className="bg-blue-600 text-white text-xs px-3 py-1.5 rounded-lg font-medium hover:bg-blue-700 disabled:opacity-50"
+            >
+              {bulkMerging ? bulkProgress : `Merge all ${identicalPairs.length} identical`}
+            </button>
+          )}
           <button onClick={load} className="text-xs text-gray-400 hover:text-gray-600">↺ Refresh</button>
           <Link href="/contacts" className="text-gray-500 hover:text-gray-900 text-sm">← Contacts</Link>
         </div>
