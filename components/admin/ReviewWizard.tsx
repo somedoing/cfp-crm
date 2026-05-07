@@ -166,25 +166,25 @@ export default function ReviewWizard({
   return (
     <div className="space-y-3">
       {/* Header */}
-      <div className="flex items-center justify-between gap-4">
+      <div className="flex items-center justify-between gap-2">
         <Link href="/contacts" className="text-gray-500 hover:text-gray-900 text-sm shrink-0">
           ← Contacts
         </Link>
 
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2 flex-wrap justify-center">
           <span className="text-gray-600 text-sm font-medium">
-            {unreviewed.length.toLocaleString()} unreviewed
+            {unreviewed.length.toLocaleString()} left
           </span>
           <span className="text-gray-300">·</span>
           <span className="text-green-600 text-sm font-medium">
-            {reviewedCount.toLocaleString()} reviewed
+            {reviewedCount.toLocaleString()} done
           </span>
           {isReviewedSection && contact && (
             <Badge className="bg-green-100 text-green-700 border-green-200">Reviewed</Badge>
           )}
         </div>
 
-        <span className="text-gray-400 text-xs shrink-0">← → navigate · N skip</span>
+        <span className="text-gray-400 text-xs shrink-0 hidden sm:block">← → navigate</span>
       </div>
 
       {/* Progress bar */}
@@ -213,9 +213,9 @@ export default function ReviewWizard({
       )}
 
       {contact && (
-        <div className="grid grid-cols-5 gap-4 items-start">
-          {/* Contact edit card — takes 3/5 */}
-          <div className="col-span-3">
+        <div className="flex flex-col lg:grid lg:grid-cols-5 gap-4 items-start">
+          {/* Contact edit card */}
+          <div className="lg:col-span-3">
             <WizardCard
               key={contact.id}
               ref={cardRef}
@@ -224,63 +224,93 @@ export default function ReviewWizard({
             />
           </div>
 
-          {/* Action panel — takes 2/5 */}
-          <div className="col-span-2 bg-white rounded-xl border border-gray-200 p-4 space-y-2 sticky top-4">
-            <p className="text-xs text-gray-400 font-medium uppercase tracking-wide mb-3">
-              {index + 1} / {queue.length.toLocaleString()}
-              {isReviewedSection && <span className="ml-2 text-green-500">· Reviewed</span>}
-            </p>
-
-            {/* Pipeline */}
-            {pipelineIds.has(contact.id) ? (
-              <div className="flex items-center gap-2 px-3 py-2 bg-green-50 rounded-lg border border-green-200">
-                <span className="text-green-700 text-sm font-medium">✓ In pipeline</span>
+          {/* Action panel — sidebar on desktop, stacked below on mobile */}
+          <div className="lg:col-span-2 lg:sticky lg:top-4">
+            {/* Mobile: compact horizontal action bar */}
+            <div className="lg:hidden bg-white rounded-xl border border-gray-200 p-3">
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-xs text-gray-400">
+                  {index + 1} / {queue.length.toLocaleString()}
+                </span>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={goBack}
+                    disabled={index === 0}
+                    className="text-gray-400 hover:text-gray-600 text-sm px-2 py-1 disabled:opacity-30"
+                  >
+                    ←
+                  </button>
+                  <button
+                    onClick={skip}
+                    className="text-gray-400 hover:text-gray-600 text-sm px-2 py-1"
+                  >
+                    →
+                  </button>
+                  <Link
+                    href={`/contacts/${contact.id}`}
+                    target="_blank"
+                    className="text-gray-400 hover:text-gray-600 text-sm px-2 py-1"
+                  >
+                    ↗
+                  </Link>
+                </div>
               </div>
-            ) : (
-              <Button className="w-full justify-start bg-blue-600 hover:bg-blue-700" onClick={addToPipeline}>
-                + Add to pipeline
-              </Button>
-            )}
-
-            <div className="border-t pt-3 mt-1 space-y-2">
-              <Button
-                variant="outline"
-                className="w-full justify-start border-green-200 text-green-700 hover:bg-green-50"
-                onClick={markReviewed}
-              >
-                Reviewed ✓ → Next
-              </Button>
-              <Button
-                variant="ghost"
-                className="w-full justify-start text-gray-500"
-                onClick={skip}
-              >
-                Skip for now
-              </Button>
-              <Button
-                variant="ghost"
-                className="w-full justify-start text-red-400 hover:text-red-600 hover:bg-red-50"
-                onClick={doNotContact}
-              >
-                Do not contact
-              </Button>
+              <div className="grid grid-cols-2 gap-2">
+                {pipelineIds.has(contact.id) ? (
+                  <div className="col-span-2 flex items-center gap-2 px-3 py-2 bg-green-50 rounded-lg border border-green-200">
+                    <span className="text-green-700 text-sm font-medium">✓ In pipeline</span>
+                  </div>
+                ) : (
+                  <Button size="sm" className="col-span-2 bg-blue-600 hover:bg-blue-700" onClick={addToPipeline}>
+                    + Add to pipeline
+                  </Button>
+                )}
+                <Button size="sm" variant="outline" className="border-green-200 text-green-700 hover:bg-green-50 text-xs" onClick={markReviewed}>
+                  Reviewed ✓ → Next
+                </Button>
+                <Button size="sm" variant="ghost" className="text-red-400 hover:text-red-600 hover:bg-red-50 text-xs" onClick={doNotContact}>
+                  Do not contact
+                </Button>
+              </div>
             </div>
 
-            <div className="border-t pt-3 flex items-center justify-between">
-              <button
-                onClick={goBack}
-                disabled={index === 0}
-                className="text-gray-400 hover:text-gray-600 text-sm disabled:opacity-30"
-              >
-                ← Back
-              </button>
-              <Link
-                href={`/contacts/${contact.id}`}
-                target="_blank"
-                className="text-gray-400 hover:text-gray-600 text-sm"
-              >
-                Full page ↗
-              </Link>
+            {/* Desktop: full vertical panel */}
+            <div className="hidden lg:block bg-white rounded-xl border border-gray-200 p-4 space-y-2">
+              <p className="text-xs text-gray-400 font-medium uppercase tracking-wide mb-3">
+                {index + 1} / {queue.length.toLocaleString()}
+                {isReviewedSection && <span className="ml-2 text-green-500">· Reviewed</span>}
+              </p>
+
+              {pipelineIds.has(contact.id) ? (
+                <div className="flex items-center gap-2 px-3 py-2 bg-green-50 rounded-lg border border-green-200">
+                  <span className="text-green-700 text-sm font-medium">✓ In pipeline</span>
+                </div>
+              ) : (
+                <Button className="w-full justify-start bg-blue-600 hover:bg-blue-700" onClick={addToPipeline}>
+                  + Add to pipeline
+                </Button>
+              )}
+
+              <div className="border-t pt-3 mt-1 space-y-2">
+                <Button variant="outline" className="w-full justify-start border-green-200 text-green-700 hover:bg-green-50" onClick={markReviewed}>
+                  Reviewed ✓ → Next
+                </Button>
+                <Button variant="ghost" className="w-full justify-start text-gray-500" onClick={skip}>
+                  Skip for now
+                </Button>
+                <Button variant="ghost" className="w-full justify-start text-red-400 hover:text-red-600 hover:bg-red-50" onClick={doNotContact}>
+                  Do not contact
+                </Button>
+              </div>
+
+              <div className="border-t pt-3 flex items-center justify-between">
+                <button onClick={goBack} disabled={index === 0} className="text-gray-400 hover:text-gray-600 text-sm disabled:opacity-30">
+                  ← Back
+                </button>
+                <Link href={`/contacts/${contact.id}`} target="_blank" className="text-gray-400 hover:text-gray-600 text-sm">
+                  Full page ↗
+                </Link>
+              </div>
             </div>
           </div>
         </div>
@@ -393,7 +423,7 @@ const WizardCard = forwardRef<WizardCardHandle, {
   }
 
   return (
-    <div className="bg-white rounded-xl border border-gray-200 p-5 space-y-4">
+    <div className="bg-white rounded-xl border border-gray-200 p-4 sm:p-5 space-y-4">
       {/* Name row */}
       <div className="flex items-start justify-between gap-3">
         <div className="flex-1 space-y-1">
@@ -460,7 +490,7 @@ const WizardCard = forwardRef<WizardCardHandle, {
       </div>
 
       {/* Stages */}
-      <div className="grid grid-cols-3 gap-2">
+      <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
         <div className="space-y-1">
           <label className="text-xs text-gray-400">Volunteer stage</label>
           <Select

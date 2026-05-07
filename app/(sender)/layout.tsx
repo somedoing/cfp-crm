@@ -15,7 +15,7 @@ export default async function CandidateLayout({ children }: { children: React.Re
           <span className="text-xs text-gray-400">Community First Party</span>
         </div>
       </nav>
-      <main className="max-w-3xl mx-auto px-4 py-6">
+      <main className="max-w-3xl mx-auto px-3 sm:px-4 py-4 sm:py-6">
         {children}
       </main>
     </div>
