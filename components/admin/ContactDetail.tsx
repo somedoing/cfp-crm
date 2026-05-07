@@ -225,8 +225,28 @@ export default function ContactDetail({
     setAddingInt(false)
   }
 
+  const [pipelineAdding, setPipelineAdding] = useState(false)
+  const [pipelineAdded, setPipelineAdded] = useState<string | null>(null)
   const [confirmDelete, setConfirmDelete] = useState(false)
   const [deleting, setDeleting] = useState(false)
+
+  async function addToPipeline(status: string) {
+    setPipelineAdding(true)
+    const priorityMap: Record<string, string> = { Core: 'High', Active: 'Medium', Supporter: 'Low', 'Needs Review': 'Medium' }
+    const typeMap: Record<string, string> = { Core: 'Check in', Active: 'Check in', Supporter: 'Check in', 'Needs Review': 'Follow-up' }
+    await supabase.from('actions').insert({
+      contact_id: initial.id,
+      title: `${displayName} — ${status}`,
+      action_type: typeMap[status] ?? 'Follow-up',
+      action_area: 'General Supporter Follow-Up',
+      assigned_to: 'admin',
+      status,
+      priority: priorityMap[status] ?? 'Medium',
+      due_date: new Date().toISOString().split('T')[0],
+    })
+    setPipelineAdded(status)
+    setPipelineAdding(false)
+  }
 
   async function handleDelete() {
     setDeleting(true)
@@ -388,6 +408,32 @@ export default function ContactDetail({
             {notesSaved && <span className="text-green-600 text-sm">Saved</span>}
           </div>
         </div>
+      </div>
+
+      {/* Pipeline quick-add */}
+      <div className="bg-white rounded-xl border border-gray-200 p-4">
+        <p className="text-xs text-gray-400 font-medium uppercase tracking-wide mb-3">Add to pipeline</p>
+        {pipelineAdded ? (
+          <p className="text-sm text-green-600 font-medium">✓ Added to {pipelineAdded} — <Link href="/actions" className="underline">view pipeline</Link></p>
+        ) : (
+          <div className="flex flex-wrap gap-2">
+            {[
+              { status: 'Needs Review', label: 'Needs Review', style: 'border-gray-300 text-gray-600 hover:bg-gray-50' },
+              { status: 'Supporter', label: 'Supporter', style: 'border-teal-200 text-teal-700 hover:bg-teal-50' },
+              { status: 'Active', label: 'Active', style: 'border-indigo-200 text-indigo-700 hover:bg-indigo-50' },
+              { status: 'Core', label: 'Core', style: 'border-amber-200 text-amber-700 hover:bg-amber-50' },
+            ].map(({ status, label, style }) => (
+              <button
+                key={status}
+                onClick={() => addToPipeline(status)}
+                disabled={pipelineAdding}
+                className={`px-3 py-1.5 rounded-lg border text-sm font-medium transition-colors disabled:opacity-50 ${style}`}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+        )}
       </div>
 
       {/* Open actions */}

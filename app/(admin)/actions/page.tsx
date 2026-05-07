@@ -4,17 +4,25 @@ import ActionKanban from '@/components/admin/ActionKanban'
 export default async function ActionsPage() {
   const supabase = await createClient()
 
-  const [{ data: actions }, { data: profiles }] = await Promise.all([
+  const [{ data: openActions }, { data: closedActions }, { data: profiles }] = await Promise.all([
     supabase
       .from('actions')
       .select('id, title, priority, action_type, action_area, assigned_to, assigned_user_id, status, due_date, sent_at, updated_at, contact:contacts(id, full_name, email, date_added), org:organizations(id, name, org_type)')
-      .order('updated_at', { ascending: false })
-      .limit(500),
+      .not('status', 'in', '("Done","Committed","Declined","Unresponsive","Dropped","Skipped")')
+      .order('due_date', { ascending: true, nullsFirst: false }),
+    supabase
+      .from('actions')
+      .select('id, title, priority, action_type, action_area, assigned_to, assigned_user_id, status, due_date, sent_at, updated_at, contact:contacts(id, full_name, email, date_added), org:organizations(id, name, org_type)')
+      .in('status', ['Done', 'Committed', 'Declined', 'Unresponsive', 'Dropped', 'Skipped'])
+      .order('due_date', { ascending: false, nullsFirst: false })
+      .limit(50),
     supabase
       .from('profiles')
       .select('id, full_name')
       .order('full_name'),
   ])
+
+  const actions = [...(openActions ?? []), ...(closedActions ?? [])]
 
   return (
     <div className="space-y-4">

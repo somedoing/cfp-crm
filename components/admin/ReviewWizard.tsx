@@ -111,6 +111,7 @@ export default function ReviewWizard({
   const [pipelineIds, setPipelineIds] = useState(() => new Set(initialPipelineIds))
   const [assignUserId, setAssignUserId] = useState<string>('')
   const [templateId, setTemplateId] = useState<string>('')
+  const [pipelineError, setPipelineError] = useState<string>('')
   const cardRef = useRef<{ saveAll: () => Promise<void> } | null>(null)
 
   // Queue: unreviewed (newest first) then reviewed (oldest reviewed first)
@@ -143,9 +144,9 @@ export default function ReviewWizard({
 
   async function addToPipeline() {
     if (!contact) return
+    setPipelineError('')
     if (cardRef.current) await cardRef.current.saveAll()
     if (!pipelineIds.has(contact.id)) {
-      setPipelineIds(prev => new Set([...prev, contact.id]))
       const base = actionParams(contact)
       const senderOverrides = assignUserId ? {
         assigned_user_id: assignUserId,
@@ -160,9 +161,10 @@ export default function ReviewWizard({
         action_area: tpl.action_area ?? base.action_area,
         suggested_ask: tpl.suggested_ask ?? null,
         suggested_message: tpl.suggested_message ?? null,
-        template_id: tpl.id,
       } : {}
-      await supabase.from('actions').insert({ ...base, ...senderOverrides, ...templateOverrides })
+      const { error } = await supabase.from('actions').insert({ ...base, ...senderOverrides, ...templateOverrides })
+      if (error) { setPipelineError(error.message); return }
+      setPipelineIds(prev => new Set([...prev, contact.id]))
     }
     const ts = new Date().toISOString()
     await supabase.from('contacts').update({ reviewed_at: ts }).eq('id', contact.id)
@@ -315,6 +317,7 @@ export default function ReviewWizard({
                   {templates.map(t => <option key={t.id} value={t.id}>{t.title}</option>)}
                 </select>
               )}
+              {pipelineError && <p className="text-red-600 text-xs">{pipelineError}</p>}
               <div className="grid grid-cols-2 gap-2">
                 {pipelineIds.has(contact.id) ? (
                   <div className="col-span-2 flex items-center gap-2 px-3 py-2 bg-green-50 rounded-lg border border-green-200">
@@ -384,6 +387,7 @@ export default function ReviewWizard({
                 ) : null
               })()}
 
+              {pipelineError && <p className="text-red-600 text-xs">{pipelineError}</p>}
               {pipelineIds.has(contact.id) ? (
                 <div className="flex items-center gap-2 px-3 py-2 bg-green-50 rounded-lg border border-green-200">
                   <span className="text-green-700 text-sm font-medium">✓ In pipeline</span>

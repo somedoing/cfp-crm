@@ -12,7 +12,7 @@ export default async function ContactPage({ params }: { params: Promise<{ id: st
       .from('actions')
       .select('id, title, status, priority, action_type, action_area, due_date, sent_at, completed_date, notes, created_at')
       .eq('contact_id', id)
-      .order('created_at', { ascending: false }),
+      .order('due_date', { ascending: false, nullsFirst: false }),
     supabase
       .from('interactions')
       .select('id, interaction_date, interaction_type, direction, summary, result, notes, created_at')
