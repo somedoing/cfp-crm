@@ -285,13 +285,22 @@ export default function MergeWizard() {
   const [pairs, setPairs] = useState<DupePair[]>([])
   const [loading, setLoading] = useState(true)
   const [mergedCount, setMergedCount] = useState(0)
+  const [contactCount, setContactCount] = useState(0)
+  const [loadError, setLoadError] = useState('')
   const [bulkMerging, setBulkMerging] = useState(false)
   const [bulkProgress, setBulkProgress] = useState('')
 
   const load = useCallback(async () => {
     setLoading(true)
-    const result = await fetchDuplicatePairs()
-    setPairs((result.pairs ?? []) as DupePair[])
+    setLoadError('')
+    try {
+      const result = await fetchDuplicatePairs()
+      if (result.error) { setLoadError(result.error); setLoading(false); return }
+      setPairs((result.pairs ?? []) as DupePair[])
+      setContactCount(result.contactCount ?? 0)
+    } catch (e) {
+      setLoadError(e instanceof Error ? e.message : String(e))
+    }
     setLoading(false)
   }, [])
 
@@ -359,7 +368,9 @@ export default function MergeWizard() {
           <p className="text-gray-500 text-sm mt-0.5">
             {pairs.length} suspected duplicate pair{pairs.length !== 1 ? 's' : ''} remaining
             {mergedCount > 0 && ` · ${mergedCount} merged this session`}
+            {contactCount > 0 && ` · scanning ${contactCount} contacts`}
           </p>
+          {loadError && <p className="text-red-500 text-xs mt-1">{loadError}</p>}
         </div>
         <div className="flex items-center gap-3">
           {identicalPairs.length > 0 && (

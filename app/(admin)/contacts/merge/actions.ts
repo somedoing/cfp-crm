@@ -15,8 +15,8 @@ export async function fetchDuplicatePairs() {
     .order('id', { ascending: true })
     .range(0, 9999)
 
-  if (error) return { error: error.message, pairs: [] }
-  if (!contacts) return { pairs: [] }
+  if (error) return { error: error.message, pairs: [], contactCount: 0 }
+  if (!contacts) return { pairs: [], contactCount: 0 }
 
   // Email duplicates
   const emailGroups = new Map<string, any[]>()
@@ -58,7 +58,7 @@ export async function fetchDuplicatePairs() {
   addPairs(emailGroups, 'email')
   addPairs(nameGroups, 'name')
 
-  return { pairs }
+  return { pairs, contactCount: contacts.length }
 }
 
 export async function mergeContacts({
