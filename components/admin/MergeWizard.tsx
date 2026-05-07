@@ -256,11 +256,36 @@ export default function MergeWizard({ pairs: initialPairs }: { pairs: DupePair[]
                           )}
                         </div>
                         <p className="font-semibold text-gray-900 truncate">{contact.full_name || '(no name)'}</p>
-                        <p className="text-xs text-gray-500 truncate">{contact.email || '—'}</p>
-                        <p className="text-xs text-gray-400">{contact.phone || '—'}</p>
-                        <p className="text-xs text-gray-400">{[contact.town, contact.state].filter(Boolean).join(', ') || '—'}</p>
-                        {contact.date_added && <p className="text-xs text-gray-400 mt-1">Added {contact.date_added}</p>}
-                        {contact.source && <p className="text-xs text-gray-400 truncate">{contact.source}</p>}
+                        <div className="mt-2 space-y-0.5">
+                          {[
+                            { label: 'Email',   value: contact.email },
+                            { label: 'Phone',   value: contact.phone },
+                            { label: 'Town',    value: contact.town },
+                            { label: 'State',   value: contact.state },
+                            { label: 'ZIP',     value: contact.zip },
+                            { label: 'Source',  value: contact.source },
+                            { label: 'Added',   value: contact.date_added },
+                            { label: 'Vol stage',   value: contact.volunteer_stage },
+                            { label: 'Donor stage', value: contact.donor_stage },
+                            { label: 'Discord', value: contact.discord_username },
+                          ].map(({ label, value }) => (
+                            <div key={label} className="flex gap-1.5 text-xs">
+                              <span className="text-gray-400 w-20 shrink-0">{label}</span>
+                              <span className={value ? 'text-gray-700' : 'text-gray-300'}>{value || '—'}</span>
+                            </div>
+                          ))}
+                          <div className="flex gap-1.5 text-xs pt-0.5 flex-wrap">
+                            {contact.is_volunteer && <span className="bg-gray-100 text-gray-600 rounded px-1">Vol</span>}
+                            {contact.is_donor && <span className="bg-gray-100 text-gray-600 rounded px-1">Donor</span>}
+                            {contact.is_signature_collector && <span className="bg-gray-100 text-gray-600 rounded px-1">Sig</span>}
+                            {contact.is_supporter && <span className="bg-gray-100 text-gray-600 rounded px-1">Supporter</span>}
+                            {contact.newsletter_subscriber && <span className="bg-gray-100 text-gray-600 rounded px-1">Newsletter</span>}
+                            {contact.do_not_contact && <span className="bg-red-100 text-red-600 rounded px-1">DNC</span>}
+                          </div>
+                          {contact.tags && contact.tags.length > 0 && (
+                            <p className="text-xs text-blue-600 truncate">{contact.tags.join(', ')}</p>
+                          )}
+                        </div>
                       </div>
                     )
                   })}
