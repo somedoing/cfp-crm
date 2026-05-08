@@ -37,7 +37,7 @@ export default async function OutreachPage() {
     <div className="space-y-4">
       <div>
         <h1 className="text-xl font-semibold text-gray-900">Outreach Queue</h1>
-        <p className="text-sm text-gray-500 mt-0.5">{todayLabel}</p>
+        <p className="text-sm text-gray-500 mt-1">{todayLabel}</p>
       </div>
 
       <OutreachTabs actions={actions} userId={user?.id ?? ''} today={todayStr} />
