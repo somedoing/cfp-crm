@@ -255,10 +255,12 @@ function applyFieldMap(row: ParsedRow, fieldMap: FieldMap, sourceForm: string): 
           const [last, ...firstParts] = s.split(',').map(p => p.trim())
           contact.first_name = firstParts.join(' ') || ''
           contact.last_name = last || ''
+          contact.full_name = `${contact.first_name} ${contact.last_name}`.trim()
         } else {
           const parts = s.split(/\s+/)
           contact.first_name = parts[0] ?? ''
           contact.last_name = parts.slice(1).join(' ') || ''
+          contact.full_name = s
         }
         break
       }

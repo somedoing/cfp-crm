@@ -94,7 +94,9 @@ export default function ContactsClient({
   )
 
   const filtered = useMemo(() => {
-    let result = contacts.filter(c => !c.do_not_contact)
+    // Only hide DNC contacts when there's no active search — if you're searching for someone
+    // by name you should be able to find them regardless of DNC status
+    let result = search.trim() ? contacts : contacts.filter(c => !c.do_not_contact)
 
     if (outreachFilter === 'needs') result = result.filter(c => !pipelineIds.has(c.id))
     if (typeFilter === 'volunteer') result = result.filter(c => c.is_volunteer)
@@ -105,12 +107,15 @@ export default function ContactsClient({
 
     if (search.trim()) {
       const q = search.toLowerCase()
-      result = result.filter(
-        c =>
-          c.full_name?.toLowerCase().includes(q) ||
+      result = result.filter(c => {
+        const name = c.full_name || [c.first_name, c.last_name].filter(Boolean).join(' ')
+        return (
+          name?.toLowerCase().includes(q) ||
           c.email?.toLowerCase().includes(q) ||
-          c.town?.toLowerCase().includes(q)
-      )
+          c.town?.toLowerCase().includes(q) ||
+          c.display_id?.toLowerCase().includes(q)
+        )
+      })
     }
 
     result = [...result].sort((a, b) => {
