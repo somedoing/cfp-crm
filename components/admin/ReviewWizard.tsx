@@ -9,6 +9,7 @@ import { Textarea } from '@/components/ui/textarea'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import Link from 'next/link'
 import { ALL_TAGS } from '@/lib/tags'
+import { retag } from '@/app/(admin)/contacts/review/actions'
 
 const VOLUNTEER_STAGES = ['New','Contacted','Interested','Asked','Assigned','Active','Reliable','Lead','Paused','Inactive','Not a fit']
 const DONOR_STAGES = ['Prospect','Not asked','Asked','Pledged','Donated','Thanked','Recurring','Lapsed','Do not solicit']
@@ -113,7 +114,22 @@ export default function ReviewWizard({
   const [assignUserId, setAssignUserId] = useState<string>('')
   const [templateId, setTemplateId] = useState<string>('')
   const [pipelineError, setPipelineError] = useState<string>('')
+  const [retagging, setRetagging] = useState(false)
+  const [retagResult, setRetagResult] = useState<string>('')
   const cardRef = useRef<{ saveAll: () => Promise<void> } | null>(null)
+
+  async function runRetag() {
+    setRetagging(true)
+    setRetagResult('')
+    const result = await retag()
+    if ('error' in result) {
+      setRetagResult(`Error: ${result.error}`)
+    } else {
+      setRetagResult(`Done — updated ${result.updated} of ${result.total} contacts`)
+      window.location.reload()
+    }
+    setRetagging(false)
+  }
 
   // Queue: unreviewed (newest first) then reviewed (oldest reviewed first)
   const { unreviewed, reviewed, queue } = useMemo(() => {
@@ -244,8 +260,21 @@ export default function ReviewWizard({
           )}
         </div>
 
-        <span className="text-gray-400 text-xs shrink-0 hidden sm:block">← → navigate</span>
+        <div className="flex items-center gap-2 shrink-0">
+          <span className="text-gray-400 text-xs hidden sm:block">← → navigate</span>
+          <button
+            onClick={runRetag}
+            disabled={retagging}
+            className="text-xs text-gray-400 hover:text-gray-600 disabled:opacity-50"
+            title="Strip old tags and re-apply correct tags from contact flags"
+          >
+            {retagging ? 'Fixing tags…' : 'Fix tags'}
+          </button>
+        </div>
       </div>
+      {retagResult && (
+        <p className="text-xs text-gray-500 text-right">{retagResult}</p>
+      )}
 
       {/* Progress bar */}
       <div className="h-1 bg-gray-200 rounded-full overflow-hidden">
@@ -549,19 +578,9 @@ const WizardCard = forwardRef<WizardCardHandle, {
   const displayName = [firstName, lastName].filter(Boolean).join(' ').trim()
     || contact.email || contact.display_id || '(no name)'
 
-  // Contact-preference toggles — affect HOW we reach out
-  const prefFlags: { field: string; label: string; value: boolean }[] = [
-    { field: 'email_opt_in',          label: 'Email opt-in',  value: contact.email_opt_in },
-    { field: 'text_opt_in',           label: 'Text opt-in',   value: contact.text_opt_in },
-    { field: 'newsletter_subscriber', label: 'Newsletter',    value: contact.newsletter_subscriber },
-    { field: 'in_discord',            label: 'Discord',       value: contact.in_discord },
-  ]
-
   const dateAdded = contact.date_added
     ? new Date(contact.date_added).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
-    : contact.created_at
-      ? `Imported ${new Date(contact.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}`
-      : null
+    : null
 
   return (
     <div className="bg-white rounded-xl border border-gray-200 p-4 sm:p-5 space-y-4">
@@ -572,27 +591,52 @@ const WizardCard = forwardRef<WizardCardHandle, {
           {contact.display_id && <span className="text-xs text-gray-400 font-mono shrink-0">{contact.display_id}</span>}
         </div>
 
-        {/* Origin info */}
-        <div className="rounded-lg bg-gray-50 border border-gray-200 px-3 py-2 space-y-0.5">
-          <div className="flex items-center gap-2">
-            <span className="text-xs font-semibold text-gray-500 uppercase tracking-wide w-12 shrink-0">Date</span>
-            {dateAdded
-              ? <span className="text-sm font-semibold text-gray-900">{dateAdded}</span>
-              : <span className="text-sm font-semibold text-amber-600">No date on record</span>
-            }
-          </div>
-          <div className="flex items-center gap-2">
-            <span className="text-xs font-semibold text-gray-500 uppercase tracking-wide w-12 shrink-0">Source</span>
-            {contact.source
-              ? <span className="text-sm text-gray-800">{contact.source}</span>
-              : <span className="text-sm text-amber-600">No source on record</span>
-            }
-          </div>
-          {contact.original_source_form && (
-            <div className="flex items-center gap-2">
-              <span className="text-xs font-semibold text-gray-500 uppercase tracking-wide w-12 shrink-0">Form</span>
-              <span className="text-sm text-gray-800">{contact.original_source_form}</span>
+        {/* What they did — the main thing you need to know */}
+        <div className="rounded-lg border border-gray-200 px-3 py-2.5 space-y-1.5">
+          {contact.is_donor && (
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <span className="w-2 h-2 rounded-full bg-green-500 shrink-0" />
+                <span className="text-sm font-semibold text-gray-900">Donated</span>
+              </div>
+              <span className="text-xs text-gray-400">{dateAdded ?? 'date unknown'}</span>
             </div>
+          )}
+          {contact.is_volunteer && (
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <span className="w-2 h-2 rounded-full bg-blue-500 shrink-0" />
+                <span className="text-sm font-semibold text-gray-900">Signed up to volunteer</span>
+              </div>
+              <span className="text-xs text-gray-400">{dateAdded ?? 'date unknown'}</span>
+            </div>
+          )}
+          {contact.is_signature_collector && (
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <span className="w-2 h-2 rounded-full bg-purple-500 shrink-0" />
+                <span className="text-sm font-semibold text-gray-900">Signed up to collect signatures</span>
+              </div>
+              <span className="text-xs text-gray-400">{dateAdded ?? 'date unknown'}</span>
+            </div>
+          )}
+          {contact.newsletter_subscriber && (
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <span className="w-2 h-2 rounded-full bg-gray-400 shrink-0" />
+                <span className="text-sm text-gray-700">Newsletter subscriber</span>
+              </div>
+              <span className="text-xs text-gray-400">{dateAdded ?? 'date unknown'}</span>
+            </div>
+          )}
+          {!contact.is_donor && !contact.is_volunteer && !contact.is_signature_collector && !contact.newsletter_subscriber && (
+            <div className="flex items-center gap-2">
+              <span className="w-2 h-2 rounded-full bg-amber-400 shrink-0" />
+              <span className="text-sm text-amber-700">No specific action on record</span>
+            </div>
+          )}
+          {contact.original_source_form && contact.original_source_form !== 'Squarespace Contacts Export' && (
+            <p className="text-xs text-gray-400 pt-0.5">via {contact.original_source_form}</p>
           )}
         </div>
 
@@ -625,30 +669,11 @@ const WizardCard = forwardRef<WizardCardHandle, {
         </div>
       </div>
 
-      {/* Contact preferences */}
-      <div>
-        <p className="text-xs text-gray-400 mb-1.5">Contact preferences</p>
-        <div className="flex flex-wrap gap-1.5">
-          {prefFlags.map(({ field, label, value }) => (
-            <button
-              key={field}
-              onClick={() => toggleFlag(field, value)}
-              className={`px-2 py-0.5 rounded border text-xs font-medium transition-all ${
-                value
-                  ? 'bg-blue-50 text-blue-700 border-blue-300'
-                  : 'bg-white text-gray-300 border-gray-200 hover:border-gray-400 hover:text-gray-500'
-              }`}
-            >
-              {label}
-            </button>
-          ))}
-          {contact.do_not_contact && (
-            <span className="px-2 py-0.5 rounded border text-xs font-medium bg-red-100 text-red-700 border-red-300">
-              Do not contact
-            </span>
-          )}
-        </div>
-      </div>
+      {contact.do_not_contact && (
+        <span className="px-2 py-0.5 rounded border text-xs font-medium bg-red-100 text-red-700 border-red-300">
+          Do not contact
+        </span>
+      )}
 
       {/* Donation history */}
       {contact.is_donor && (
