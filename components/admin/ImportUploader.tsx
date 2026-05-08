@@ -131,7 +131,8 @@ function guessFieldMapping(columnName: string): string {
   if (col === 'text/phone' || col.includes('text consent') || col.includes('receive text') || col.includes('sms')) return 'text_opt_in'
   if (col === 'donation count') return 'donation_count'
   if (col === 'total donation amount') return 'donation_amount'
-  if (col === 'created on') return 'date_added'
+  if (col === 'created on' || col === 'subscriber since' || col === 'member since') return 'date_added'
+  if (col === 'subscriber source') return 'subscriber_source'
   // Notes — volunteer interest fields, messages, free text
   if (col === 'notes' || col === 'note' || col === 'message' || col === 'tags') return 'notes'
   if (col === 'interest area(s)' || col === 'interest areas' || col === 'interests') return 'notes'
@@ -284,10 +285,15 @@ function applyFieldMap(row: ParsedRow, fieldMap: FieldMap, sourceForm: string): 
         }
         break
       case 'date_added': {
-        const parsed = new Date(val)
+        // Squarespace format: "May 7, 2026 at 10:52:02 AM EDT" — "at" breaks JS Date parser
+        const cleaned = val.replace(/\s+at\s+/i, ' ').replace(/\s+(EDT|EST|CDT|CST|PDT|PST|MDT|MST)\s*$/i, '')
+        const parsed = new Date(cleaned)
         if (!isNaN(parsed.getTime())) contact.date_added = parsed.toISOString().split('T')[0]
         break
       }
+      case 'subscriber_source':
+        if (val) notesParts.push(`Squarespace source: ${val}`)
+        break
       case 'newsletter_subscriber':
       case 'is_volunteer':
       case 'is_donor':
