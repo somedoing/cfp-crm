@@ -6,13 +6,20 @@ export default async function OutreachPage() {
 
   const { data: { user } } = await supabase.auth.getUser()
 
-  const { data: actions } = await supabase
-    .from('actions')
-    .select('*, contact:contacts(full_name, display_id, email, phone, notes)')
-    .eq('assigned_user_id', user?.id ?? '')
-    .not('status', 'in', '("Done","Dropped","Skipped","Committed","Declined","Unresponsive")')
-    .order('priority', { ascending: true })
-    .order('due_date', { ascending: true })
+  let actions: any[] = []
+  try {
+    const { data, error } = await supabase
+      .from('actions')
+      .select('*, contact:contacts(full_name, display_id, email, phone, notes)')
+      .eq('assigned_user_id', user?.id ?? '')
+      .not('status', 'in', '("Done","Dropped","Skipped","Committed","Declined","Unresponsive")')
+      .order('priority', { ascending: true })
+      .order('due_date', { ascending: true })
+
+    if (!error && data) actions = data
+  } catch {
+    // Query failed — show empty state rather than crashing
+  }
 
   const today = new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })
 
@@ -23,7 +30,7 @@ export default async function OutreachPage() {
         <p className="text-sm text-gray-500 mt-0.5">{today}</p>
       </div>
 
-      {actions && actions.length > 0 ? (
+      {actions.length > 0 ? (
         <>
           <p className="text-sm text-gray-600">
             You have <strong>{actions.length}</strong> {actions.length === 1 ? 'person' : 'people'} to reach out to.

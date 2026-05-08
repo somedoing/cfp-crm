@@ -9,7 +9,7 @@ export default async function SenderContactPage({ params }: { params: Promise<{ 
   const [{ data: contact }, { data: interactions }] = await Promise.all([
     supabase
       .from('contacts')
-      .select('id, full_name, email, phone, town, state, notes, last_contact_summary, volunteer_stage, donor_stage')
+      .select('id, full_name, email, phone, town, state, notes, volunteer_stage, donor_stage')
       .eq('id', id)
       .single(),
     supabase
