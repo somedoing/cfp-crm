@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useDeferredValue } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { Badge } from '@/components/ui/badge'
@@ -78,6 +78,7 @@ export default function ContactsClient({
   const router = useRouter()
 
   const [search, setSearch] = useState('')
+  const deferredSearch = useDeferredValue(search)
   const [confirmDelete, setConfirmDelete] = useState(false)
   const [deleting, setDeleting] = useState(false)
   const [deleteError, setDeleteError] = useState('')
@@ -96,9 +97,10 @@ export default function ContactsClient({
   )
 
   const filtered = useMemo(() => {
-    // Only hide DNC contacts when there's no active search — if you're searching for someone
-    // by name you should be able to find them regardless of DNC status
-    let result = search.trim() ? contacts : contacts.filter(c => !c.do_not_contact)
+    const q = deferredSearch.trim().toLowerCase()
+
+    // Only hide DNC contacts when there's no active search
+    let result = q ? contacts : contacts.filter(c => !c.do_not_contact)
 
     if (outreachFilter === 'needs') result = result.filter(c => !pipelineIds.has(c.id))
     if (typeFilter === 'volunteer') result = result.filter(c => c.is_volunteer)
@@ -107,8 +109,7 @@ export default function ContactsClient({
     if (typeFilter === 'press') result = result.filter(c => c.is_press_contact || c.is_media_contact)
     if (tagFilter) result = result.filter(c => c.tags?.includes(tagFilter))
 
-    if (search.trim()) {
-      const q = search.toLowerCase()
+    if (q) {
       result = result.filter(c => {
         const name = c.full_name || [c.first_name, c.last_name].filter(Boolean).join(' ')
         return (
@@ -126,10 +127,11 @@ export default function ContactsClient({
         const da = a.date_added ?? ''
         const db = b.date_added ?? ''
         cmp = da < db ? -1 : da > db ? 1 : 0
-        // secondary: priority
         if (cmp === 0) cmp = priorityScore(a.priority) - priorityScore(b.priority)
       } else if (sortCol === 'full_name') {
-        cmp = (a.full_name ?? '').localeCompare(b.full_name ?? '')
+        const na = a.full_name || [a.first_name, a.last_name].filter(Boolean).join(' ')
+        const nb = b.full_name || [b.first_name, b.last_name].filter(Boolean).join(' ')
+        cmp = na.localeCompare(nb)
       } else if (sortCol === 'town') {
         cmp = (a.town ?? '').localeCompare(b.town ?? '')
       } else if (sortCol === 'volunteer_stage') {
@@ -139,7 +141,7 @@ export default function ContactsClient({
     })
 
     return result
-  }, [contacts, search, typeFilter, outreachFilter, tagFilter, pipelineIds, sortCol, sortDir])
+  }, [contacts, deferredSearch, typeFilter, outreachFilter, tagFilter, pipelineIds, sortCol, sortDir])
 
   const visible = filtered.slice(0, 200)
   const visibleIds = useMemo(() => new Set(visible.map(c => c.id)), [visible])
