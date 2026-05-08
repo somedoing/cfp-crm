@@ -44,10 +44,11 @@ type Props = {
   onActionUpdate: (id: string, updates: { status: string; due_date?: string | null }) => void
 }
 
-type LastInteraction = {
+type Interaction = {
   interaction_date: string
   summary: string | null
   interaction_type: string
+  direction: string | null
 }
 
 const OUTCOMES = ['Yes', 'Maybe', 'No', 'No response', 'Needs more info', 'Wrong contact', 'Do not contact']
@@ -115,17 +116,16 @@ export default function OutreachCard({ action, userId, today, onActionUpdate }: 
   const [followUpDate, setFollowUpDate] = useState('')
   const [saving, setSaving] = useState(false)
   const [showMessage, setShowMessage] = useState(false)
-  const [last, setLast] = useState<LastInteraction | null>(null)
+  const [interactions, setInteractions] = useState<Interaction[]>([])
 
   useEffect(() => {
     supabase
       .from('interactions')
-      .select('interaction_date, summary, interaction_type')
+      .select('interaction_date, summary, interaction_type, direction')
       .eq('contact_id', action.contact_id)
-      .in('interaction_type', ['Email', 'Call', 'Text', 'In-person', 'Meeting'])
       .order('interaction_date', { ascending: false })
-      .limit(1)
-      .then(({ data }) => { if (data?.[0]) setLast(data[0]) })
+      .limit(6)
+      .then(({ data }) => { if (data) setInteractions(data) })
   }, [action.contact_id])
 
   // Only show follow-up banner when in the follow-up tab (due date has passed)
@@ -216,6 +216,12 @@ export default function OutreachCard({ action, userId, today, onActionUpdate }: 
   const addedYear = contact.date_added ? new Date(contact.date_added).getFullYear() : null
   const actionTypeIcon = action.action_type === 'Call' ? '📞' : action.action_type === 'Text' ? '💬' : '✉️'
 
+  const stages = [
+    contact.is_volunteer && contact.volunteer_stage ? `Volunteer: ${contact.volunteer_stage}` : null,
+    contact.is_donor && contact.donor_stage ? `Donor: ${contact.donor_stage}` : null,
+    contact.is_signature_collector ? 'Sig collector' : null,
+  ].filter(Boolean)
+
   return (
     <div className={`bg-white border rounded-xl overflow-hidden ${isFollowUp ? 'border-amber-200' : 'border-gray-200'}`}>
 
@@ -228,6 +234,8 @@ export default function OutreachCard({ action, userId, today, onActionUpdate }: 
 
       {/* Contact header */}
       <div className="p-4 space-y-3">
+
+        {/* Name + priority */}
         <div className="flex items-start justify-between gap-2">
           <Link
             href={`/outreach/contacts/${action.contact_id}`}
@@ -245,6 +253,7 @@ export default function OutreachCard({ action, userId, today, onActionUpdate }: 
           </div>
         </div>
 
+        {/* Contact info */}
         <div className="space-y-0.5">
           <div className="flex flex-wrap gap-x-3 gap-y-0.5 text-sm">
             {contact.email && (
@@ -261,6 +270,7 @@ export default function OutreachCard({ action, userId, today, onActionUpdate }: 
           )}
         </div>
 
+        {/* Tags */}
         {tags.length > 0 && (
           <div className="flex flex-wrap gap-1">
             {tags.map(t => (
@@ -269,36 +279,47 @@ export default function OutreachCard({ action, userId, today, onActionUpdate }: 
           </div>
         )}
 
-        {last ? (
-          <div className="bg-gray-50 rounded-lg px-3 py-2.5">
-            <p className="text-xs text-gray-400 font-medium mb-0.5">
-              Last contact · {daysAgoLabel(last.interaction_date)}
-            </p>
-            {last.summary
-              ? <p className="text-sm text-gray-700 italic">"{last.summary}"</p>
-              : <p className="text-sm text-gray-400">No notes recorded</p>
-            }
-          </div>
-        ) : (
-          <div className="bg-gray-50 rounded-lg px-3 py-2">
-            <p className="text-xs text-gray-400">No previous contact on record</p>
+        {/* Pipeline stages */}
+        {stages.length > 0 && (
+          <div className="flex flex-wrap gap-1.5">
+            {stages.map(s => (
+              <span key={s} className="text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded-md font-medium">{s}</span>
+            ))}
           </div>
         )}
 
+        {/* Notes — shown prominently before history */}
         {(contact.notes || action.notes) && (
-          <div className="space-y-1">
-            {contact.notes && (
-              <p className="text-xs text-amber-800 bg-amber-50 border border-amber-100 px-3 py-1.5 rounded-lg">
-                <span className="font-medium">Note: </span>{contact.notes}
-              </p>
-            )}
-            {action.notes && (
-              <p className="text-xs text-amber-800 bg-amber-50 border border-amber-100 px-3 py-1.5 rounded-lg">
-                <span className="font-medium">Admin: </span>{action.notes}
-              </p>
-            )}
+          <div className="bg-amber-50 border border-amber-100 rounded-lg px-3 py-2.5 space-y-1">
+            <p className="text-xs font-semibold text-amber-700 uppercase tracking-wide">Notes</p>
+            {contact.notes && <p className="text-sm text-amber-900">{contact.notes}</p>}
+            {action.notes && <p className="text-sm text-amber-900 border-t border-amber-100 pt-1 mt-1">{action.notes}</p>}
           </div>
         )}
+
+        {/* Interaction history */}
+        <div className="space-y-0">
+          <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-1.5">History</p>
+          {interactions.length > 0 ? (
+            <div className="divide-y divide-gray-100 border border-gray-100 rounded-lg overflow-hidden">
+              {interactions.map((i, idx) => (
+                <div key={idx} className="flex items-start justify-between gap-3 px-3 py-2 bg-white">
+                  <div className="min-w-0">
+                    <span className="text-xs text-gray-500 font-medium">
+                      {i.direction === 'Inbound' ? '← ' : '→ '}{i.interaction_type}
+                    </span>
+                    {i.summary && (
+                      <p className="text-sm text-gray-700 mt-0.5 leading-snug">{i.summary}</p>
+                    )}
+                  </div>
+                  <span className="text-xs text-gray-400 shrink-0 pt-0.5">{daysAgoLabel(i.interaction_date)}</span>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <p className="text-xs text-gray-400 italic">No previous contact on record</p>
+          )}
+        </div>
       </div>
 
       {action.suggested_ask && (
