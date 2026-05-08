@@ -178,15 +178,22 @@ const NH_TOWNS = new Set([
 
 function computeAutoTags(contact: Record<string, unknown>): string[] {
   const tags: string[] = []
-  if (contact.is_donor) tags.push('Past Donor')
-  if (contact.is_volunteer) {
-    const year = contact.date_added ? new Date(contact.date_added as string).getFullYear() : null
-    tags.push(year && year < 2026 ? 'Old Volunteer Signup' : 'Volunteer Signup')
+  const year = contact.date_added ? new Date(contact.date_added as string).getFullYear() : null
+  const suffix = year ? ` ${year}` : ''
+  const sourceForm = (contact.original_source_form as string) ?? ''
+
+  if (contact.newsletter_subscriber) tags.push('Newsletter')
+
+  if (sourceForm === 'Pledge Form') {
+    tags.push(`CFP Pledge${suffix}`)
+  } else if (contact.is_volunteer) {
+    tags.push(`Volunteer Form${suffix}`)
   }
-  if (contact.is_active_volunteer) tags.push('Active Volunteer')
-  if (contact.is_supporter) tags.push('Jon Kiper Supporter')
-  if (contact.is_coalition_contact) tags.push('Org Contact')
-  if (contact.is_media_contact || contact.is_press_contact) tags.push('Media / Influencer Contact')
+
+  if (contact.is_signature_collector) tags.push(`Sig Collector${suffix}`)
+  if (contact.is_donor) tags.push(`One-Time Donor${suffix}`)
+  if (contact.is_media_contact || contact.is_press_contact) tags.push('Press')
+
   return tags
 }
 
@@ -207,15 +214,14 @@ function detectNHTown(text: string): string | null {
 function parseMailingLists(value: string): Record<string, unknown> {
   const lists = value.split(',').map(l => l.trim().toLowerCase())
   const flags: Record<string, unknown> = {}
-  if (lists.some(l => l.includes('volunteer'))) { flags.is_volunteer = true; flags.is_supporter = true; flags.volunteer_stage = 'New' }
-  if (lists.some(l => l.includes('newsletter') || l.includes('campaign newsletter'))) { flags.newsletter_subscriber = true; flags.email_opt_in = true; flags.is_supporter = true }
-  if (lists.some(l => l.includes('media'))) { flags.is_media_contact = true }
+  if (lists.some(l => l.includes('volunteer'))) { flags.is_volunteer = true; flags.volunteer_stage = 'New' }
+  if (lists.some(l => l.includes('newsletter') || l.includes('campaign newsletter'))) { flags.newsletter_subscriber = true; flags.email_opt_in = true }
+  if (lists.some(l => l.includes('media') || l.includes('press'))) { flags.is_media_contact = true }
   if (lists.some(l => l.includes('donor'))) { flags.is_donor = true; flags.donor_stage = 'Donated' }
   if (lists.some(l => l.includes('signature') || l.includes('petition'))) { flags.is_signature_collector = true; flags.signature_stage = 'New lead' }
   if (lists.some(l => l.includes('coalition'))) { flags.is_coalition_contact = true }
   if (lists.some(l => l.includes('partner'))) { flags.is_candidate_partner = true }
   if (lists.some(l => l.includes('discord'))) { flags.in_discord = true }
-  if (lists.some(l => l.includes('supporter'))) { flags.is_supporter = true }
   return flags
 }
 
@@ -267,13 +273,13 @@ function applyFieldMap(row: ParsedRow, fieldMap: FieldMap, sourceForm: string): 
         break
       case 'donation_count':
         if (parseInt(val) > 0) {
-          contact.is_donor = true; contact.donor_stage = 'Donated'; contact.is_supporter = true
+          contact.is_donor = true; contact.donor_stage = 'Donated'
           contact._donation_count = parseInt(val)
         }
         break
       case 'donation_amount':
         if (parseFloat(val) > 0) {
-          contact.is_donor = true; contact.donor_stage = 'Donated'; contact.is_supporter = true
+          contact.is_donor = true; contact.donor_stage = 'Donated'
           contact._donation_amount = parseFloat(val)
         }
         break
@@ -298,12 +304,11 @@ function applyFieldMap(row: ParsedRow, fieldMap: FieldMap, sourceForm: string): 
   if (notesParts.length > 0) contact.notes = notesParts.join('\n')
 
   // Source-form role defaults (for non-Squarespace forms)
-  if (sourceForm === 'Volunteer Interest Form') { contact.is_volunteer = true; contact.is_supporter = true; if (!contact.volunteer_stage) contact.volunteer_stage = 'New' }
-  if (sourceForm === 'Signature Collector Signup') { contact.is_volunteer = true; contact.is_signature_collector = true; contact.is_supporter = true; if (!contact.signature_stage) contact.signature_stage = 'New lead' }
-  if (sourceForm === 'Newsletter Signup') { contact.newsletter_subscriber = true; contact.email_opt_in = true; contact.is_supporter = true }
-  // Donation Form: only mark as donor if donation data was present in the CSV
+  if (sourceForm === 'Volunteer Interest Form') { contact.is_volunteer = true; if (!contact.volunteer_stage) contact.volunteer_stage = 'New' }
+  if (sourceForm === 'Signature Collector Signup') { contact.is_volunteer = true; contact.is_signature_collector = true; if (!contact.signature_stage) contact.signature_stage = 'New lead' }
+  if (sourceForm === 'Newsletter Signup') { contact.newsletter_subscriber = true; contact.email_opt_in = true }
   if (sourceForm === 'Donation Form' && !contact.is_donor) { contact.donor_stage = contact.donor_stage ?? 'Prospect' }
-  if (sourceForm === 'Pledge Form') { contact.is_supporter = true; contact.is_volunteer = true; if (!contact.volunteer_stage) contact.volunteer_stage = 'New' }
+  if (sourceForm === 'Pledge Form') { contact.is_volunteer = true; if (!contact.volunteer_stage) contact.volunteer_stage = 'New' }
 
   // NH town detection: if no town found, check notes for NH town names
   if (!contact.town && contact.notes) {

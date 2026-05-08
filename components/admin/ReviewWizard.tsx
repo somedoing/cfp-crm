@@ -60,6 +60,7 @@ type ReviewContact = {
   media_stage: string | null
   priority: string | null
   date_added: string | null
+  created_at: string | null
   notes: string | null
   do_not_contact: boolean
   reviewed_at: string | null
@@ -548,56 +549,68 @@ const WizardCard = forwardRef<WizardCardHandle, {
   const displayName = [firstName, lastName].filter(Boolean).join(' ').trim()
     || contact.email || contact.display_id || '(no name)'
 
-  const flags: { field: string; label: string; value: boolean; color?: string }[] = [
-    { field: 'is_volunteer',          label: 'Volunteer',     value: contact.is_volunteer },
-    { field: 'is_active_volunteer',   label: 'Active vol',    value: contact.is_active_volunteer, color: 'green' },
-    { field: 'is_donor',              label: 'Donor',         value: contact.is_donor },
-    { field: 'is_signature_collector',label: 'Sig collector', value: contact.is_signature_collector },
-    { field: 'is_candidate_partner',  label: 'Political ally',value: contact.is_candidate_partner, color: 'purple' },
-    { field: 'is_press_contact',      label: 'Press',         value: contact.is_press_contact, color: 'orange' },
-    { field: 'is_media_contact',      label: 'Media',         value: contact.is_media_contact, color: 'orange' },
-    { field: 'is_supporter',          label: 'Supporter',     value: contact.is_supporter },
-    { field: 'newsletter_subscriber', label: 'Newsletter',    value: contact.newsletter_subscriber },
-    { field: 'in_discord',            label: 'Discord',       value: contact.in_discord },
-    { field: 'is_coalition_contact',  label: 'Coalition',     value: contact.is_coalition_contact },
+  // Contact-preference toggles — affect HOW we reach out
+  const prefFlags: { field: string; label: string; value: boolean }[] = [
     { field: 'email_opt_in',          label: 'Email opt-in',  value: contact.email_opt_in },
     { field: 'text_opt_in',           label: 'Text opt-in',   value: contact.text_opt_in },
+    { field: 'newsletter_subscriber', label: 'Newsletter',    value: contact.newsletter_subscriber },
+    { field: 'in_discord',            label: 'Discord',       value: contact.in_discord },
   ]
 
-  const colorMap: Record<string, string> = {
-    green:  'bg-green-100 text-green-700 border-green-300',
-    purple: 'bg-purple-100 text-purple-700 border-purple-300',
-    orange: 'bg-orange-100 text-orange-700 border-orange-300',
-  }
+  const dateAdded = contact.date_added
+    ? new Date(contact.date_added).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+    : contact.created_at
+      ? `Imported ${new Date(contact.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}`
+      : null
 
   return (
     <div className="bg-white rounded-xl border border-gray-200 p-4 sm:p-5 space-y-4">
       {/* Name row */}
-      <div className="flex items-start justify-between gap-3">
-        <div className="flex-1 space-y-1">
+      <div className="space-y-2">
+        <div className="flex items-start justify-between gap-3">
           <p className="text-lg font-semibold text-gray-900">{displayName}</p>
-          <div className="grid grid-cols-2 gap-2">
-            <Input
-              placeholder="First name"
-              value={firstName}
-              onChange={e => setFirstName(e.target.value)}
-              onBlur={saveInfo}
-              className="h-8 text-sm"
-            />
-            <Input
-              placeholder="Last name"
-              value={lastName}
-              onChange={e => setLastName(e.target.value)}
-              onBlur={saveInfo}
-              className="h-8 text-sm"
-            />
-          </div>
+          {contact.display_id && <span className="text-xs text-gray-400 font-mono shrink-0">{contact.display_id}</span>}
         </div>
-        <div className="text-right text-xs text-gray-400 shrink-0 space-y-0.5">
-          {contact.display_id && <div className="font-mono">{contact.display_id}</div>}
-          {contact.date_added && <div>Added {contact.date_added}</div>}
-          {contact.source && <div>{contact.source}</div>}
-          {contact.original_source_form && <div className="max-w-32 truncate">{contact.original_source_form}</div>}
+
+        {/* Origin info */}
+        <div className="rounded-lg bg-gray-50 border border-gray-200 px-3 py-2 space-y-0.5">
+          <div className="flex items-center gap-2">
+            <span className="text-xs font-semibold text-gray-500 uppercase tracking-wide w-12 shrink-0">Date</span>
+            {dateAdded
+              ? <span className="text-sm font-semibold text-gray-900">{dateAdded}</span>
+              : <span className="text-sm font-semibold text-amber-600">No date on record</span>
+            }
+          </div>
+          <div className="flex items-center gap-2">
+            <span className="text-xs font-semibold text-gray-500 uppercase tracking-wide w-12 shrink-0">Source</span>
+            {contact.source
+              ? <span className="text-sm text-gray-800">{contact.source}</span>
+              : <span className="text-sm text-amber-600">No source on record</span>
+            }
+          </div>
+          {contact.original_source_form && (
+            <div className="flex items-center gap-2">
+              <span className="text-xs font-semibold text-gray-500 uppercase tracking-wide w-12 shrink-0">Form</span>
+              <span className="text-sm text-gray-800">{contact.original_source_form}</span>
+            </div>
+          )}
+        </div>
+
+        <div className="grid grid-cols-2 gap-2">
+          <Input
+            placeholder="First name"
+            value={firstName}
+            onChange={e => setFirstName(e.target.value)}
+            onBlur={saveInfo}
+            className="h-8 text-sm"
+          />
+          <Input
+            placeholder="Last name"
+            value={lastName}
+            onChange={e => setLastName(e.target.value)}
+            onBlur={saveInfo}
+            className="h-8 text-sm"
+          />
         </div>
       </div>
 
@@ -612,17 +625,17 @@ const WizardCard = forwardRef<WizardCardHandle, {
         </div>
       </div>
 
-      {/* Flag toggles */}
+      {/* Contact preferences */}
       <div>
-        <p className="text-xs text-gray-400 mb-1.5">Roles / flags — click to toggle</p>
+        <p className="text-xs text-gray-400 mb-1.5">Contact preferences</p>
         <div className="flex flex-wrap gap-1.5">
-          {flags.map(({ field, label, value, color }) => (
+          {prefFlags.map(({ field, label, value }) => (
             <button
               key={field}
               onClick={() => toggleFlag(field, value)}
               className={`px-2 py-0.5 rounded border text-xs font-medium transition-all ${
                 value
-                  ? (color ? colorMap[color] : 'bg-gray-200 text-gray-800 border-gray-300')
+                  ? 'bg-blue-50 text-blue-700 border-blue-300'
                   : 'bg-white text-gray-300 border-gray-200 hover:border-gray-400 hover:text-gray-500'
               }`}
             >
@@ -652,32 +665,36 @@ const WizardCard = forwardRef<WizardCardHandle, {
         </div>
       )}
 
-      {/* Stages */}
+      {/* Stages — only show when the relevant flag is active */}
       <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-        <div className="space-y-1">
-          <label className="text-xs text-gray-400">Volunteer stage</label>
-          <Select
-            value={contact.volunteer_stage ?? ''}
-            onValueChange={v => v && saveStage('volunteer_stage', v)}
-          >
-            <SelectTrigger className="h-8 text-sm"><SelectValue placeholder="—" /></SelectTrigger>
-            <SelectContent>
-              {VOLUNTEER_STAGES.map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}
-            </SelectContent>
-          </Select>
-        </div>
-        <div className="space-y-1">
-          <label className="text-xs text-gray-400">Donor stage</label>
-          <Select
-            value={contact.donor_stage ?? ''}
-            onValueChange={v => v && saveStage('donor_stage', v)}
-          >
-            <SelectTrigger className="h-8 text-sm"><SelectValue placeholder="—" /></SelectTrigger>
-            <SelectContent>
-              {DONOR_STAGES.map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}
-            </SelectContent>
-          </Select>
-        </div>
+        {contact.is_volunteer && (
+          <div className="space-y-1">
+            <label className="text-xs text-gray-400">Volunteer stage</label>
+            <Select
+              value={contact.volunteer_stage ?? ''}
+              onValueChange={v => v && saveStage('volunteer_stage', v)}
+            >
+              <SelectTrigger className="h-8 text-sm"><SelectValue placeholder="—" /></SelectTrigger>
+              <SelectContent>
+                {VOLUNTEER_STAGES.map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}
+              </SelectContent>
+            </Select>
+          </div>
+        )}
+        {contact.is_donor && (
+          <div className="space-y-1">
+            <label className="text-xs text-gray-400">Donor stage</label>
+            <Select
+              value={contact.donor_stage ?? ''}
+              onValueChange={v => v && saveStage('donor_stage', v)}
+            >
+              <SelectTrigger className="h-8 text-sm"><SelectValue placeholder="—" /></SelectTrigger>
+              <SelectContent>
+                {DONOR_STAGES.map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}
+              </SelectContent>
+            </Select>
+          </div>
+        )}
         <div className="space-y-1">
           <label className="text-xs text-gray-400">Priority</label>
           <Select
@@ -704,17 +721,20 @@ const WizardCard = forwardRef<WizardCardHandle, {
         />
       </div>
 
-      {/* Tags */}
+      {/* History / source tags */}
       <div>
-        <p className="text-xs text-gray-400 mb-1.5">Tags</p>
+        <p className="text-xs text-gray-400 mb-1.5">History — where they came from, what they've done</p>
         <div className="flex flex-wrap gap-1 mb-1.5">
+          {tags.length === 0 && (
+            <span className="text-xs text-amber-600">No history tags yet</span>
+          )}
           {tags.map(tag => (
             <button
               key={tag}
               onClick={() => removeTag(tag)}
-              className="flex items-center gap-1 px-2 py-0.5 rounded-full bg-blue-50 text-blue-700 border border-blue-200 text-xs hover:bg-red-50 hover:text-red-600 hover:border-red-200 transition-colors"
+              className="flex items-center gap-1 px-2.5 py-1 rounded-full bg-gray-100 text-gray-800 border border-gray-300 text-xs font-medium hover:bg-red-50 hover:text-red-600 hover:border-red-200 transition-colors"
             >
-              {tag} <span className="opacity-60">×</span>
+              {tag} <span className="opacity-40 ml-0.5">×</span>
             </button>
           ))}
         </div>
