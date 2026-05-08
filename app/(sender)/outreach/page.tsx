@@ -10,7 +10,15 @@ export default async function OutreachPage() {
   try {
     const { data, error } = await supabase
       .from('actions')
-      .select('*, contact:contacts(full_name, display_id, email, phone, notes)')
+      .select(`
+        id, contact_id, action_type, action_area, suggested_ask, suggested_message, notes, priority,
+        contact:contacts(
+          full_name, display_id, email, phone, notes,
+          tags, date_added, town, state,
+          volunteer_stage, donor_stage,
+          original_source_form, is_volunteer, is_donor, is_signature_collector
+        )
+      `)
       .eq('assigned_user_id', user?.id ?? '')
       .not('status', 'in', '("Done","Dropped","Skipped","Committed","Declined","Unresponsive")')
       .order('priority', { ascending: true })
@@ -18,7 +26,7 @@ export default async function OutreachPage() {
 
     if (!error && data) actions = data
   } catch {
-    // Query failed — show empty state rather than crashing
+    // show empty state rather than crashing
   }
 
   const today = new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })
@@ -37,14 +45,14 @@ export default async function OutreachPage() {
           </p>
           <div className="space-y-3">
             {actions.map((action: any) => (
-              <OutreachCard key={action.id} action={action} />
+              <OutreachCard key={action.id} action={action} userId={user?.id ?? ''} />
             ))}
           </div>
         </>
       ) : (
         <div className="text-center py-16">
           <p className="text-gray-500 text-sm">You're all caught up. No outreach items right now.</p>
-          <p className="text-gray-400 text-xs mt-1">Check back after the admin processes new imports.</p>
+          <p className="text-gray-400 text-xs mt-1">Check back after the admin assigns new outreach.</p>
         </div>
       )}
     </div>

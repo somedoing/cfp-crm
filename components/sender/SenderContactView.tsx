@@ -14,7 +14,6 @@ type Contact = {
   town: string | null
   state: string | null
   notes: string | null
-  last_contact_summary: string | null
   volunteer_stage: string | null
   donor_stage: string | null
 }
@@ -106,13 +105,6 @@ export default function SenderContactView({
                 Donor: {contact.donor_stage}
               </span>
             )}
-          </div>
-        )}
-
-        {contact.last_contact_summary && (
-          <div className="pt-2 border-t text-sm">
-            <span className="text-gray-400">Last contact: </span>
-            <span className="text-gray-700">{contact.last_contact_summary}</span>
           </div>
         )}
 
