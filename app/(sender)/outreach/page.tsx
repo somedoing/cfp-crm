@@ -1,5 +1,5 @@
 import { createClient } from '@/lib/supabase/server'
-import OutreachCard from '@/components/sender/OutreachCard'
+import OutreachTabs from '@/components/sender/OutreachTabs'
 
 export default async function OutreachPage() {
   const supabase = await createClient()
@@ -13,7 +13,8 @@ export default async function OutreachPage() {
     const { data, error } = await supabase
       .from('actions')
       .select(`
-        id, contact_id, action_type, action_area, suggested_ask, suggested_message, notes, priority, status,
+        id, contact_id, action_type, action_area, suggested_ask, suggested_message,
+        notes, priority, status, due_date,
         contact:contacts(
           full_name, display_id, email, phone, notes,
           tags, date_added, town, state,
@@ -25,42 +26,21 @@ export default async function OutreachPage() {
       .not('status', 'in', '("Done","Dropped","Skipped","Committed","Declined","Unresponsive")')
       .order('due_date', { ascending: true, nullsFirst: false })
 
-    if (!error && data) {
-      // Only hide "Waiting on response" cards whose follow-up date hasn't arrived yet
-      actions = data.filter((a: any) =>
-        !(a.status === 'Waiting on response' && a.due_date && a.due_date > todayStr)
-      )
-    }
+    if (!error && data) actions = data
   } catch {
     // show empty state rather than crashing
   }
 
-  const today = new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })
+  const todayLabel = new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })
 
   return (
     <div className="space-y-4">
       <div>
-        <h1 className="text-xl font-semibold text-gray-900">Your Outreach for Today</h1>
-        <p className="text-sm text-gray-500 mt-0.5">{today}</p>
+        <h1 className="text-xl font-semibold text-gray-900">Your Outreach Queue</h1>
+        <p className="text-sm text-gray-500 mt-0.5">{todayLabel}</p>
       </div>
 
-      {actions.length > 0 ? (
-        <>
-          <p className="text-sm text-gray-600">
-            You have <strong>{actions.length}</strong> {actions.length === 1 ? 'person' : 'people'} to reach out to.
-          </p>
-          <div className="space-y-3">
-            {actions.map((action: any) => (
-              <OutreachCard key={action.id} action={action} userId={user?.id ?? ''} />
-            ))}
-          </div>
-        </>
-      ) : (
-        <div className="text-center py-16">
-          <p className="text-gray-500 text-sm">You're all caught up. No outreach items right now.</p>
-          <p className="text-gray-400 text-xs mt-1">Check back after the admin assigns new outreach.</p>
-        </div>
-      )}
+      <OutreachTabs actions={actions} userId={user?.id ?? ''} today={todayStr} />
     </div>
   )
 }

@@ -36,9 +36,11 @@ type Props = {
     notes: string | null
     priority: string
     status: string
+    due_date: string | null
     contact: Contact
   }
   userId: string
+  today: string
 }
 
 type LastInteraction = {
@@ -92,7 +94,7 @@ function stageUpdatesForOutcome(outcome: string, contact: Contact) {
   return updates
 }
 
-export default function OutreachCard({ action, userId }: Props) {
+export default function OutreachCard({ action, userId, today }: Props) {
   const supabase = createClient()
   const { contact } = action
 
@@ -118,7 +120,8 @@ export default function OutreachCard({ action, userId }: Props) {
 
   const interactionType = action.action_type === 'Call' ? 'Call' : action.action_type === 'Text' ? 'Text' : 'Email'
   const actionLabel = action.action_type === 'Call' ? 'Called them' : action.action_type === 'Text' ? 'Texted them' : 'Emailed them'
-  const isFollowUp = action.status === 'Waiting on response'
+  // Only show follow-up banner when in the follow-up tab (due date has passed)
+  const isFollowUp = action.status === 'Waiting on response' && (!action.due_date || action.due_date <= today)
 
   // Log outreach sent — card disappears until follow-up date
   async function logOutreach() {
