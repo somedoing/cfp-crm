@@ -6,12 +6,14 @@ export default async function OutreachPage() {
 
   const { data: { user } } = await supabase.auth.getUser()
 
+  const todayStr = new Date().toISOString().split('T')[0]
+
   let actions: any[] = []
   try {
     const { data, error } = await supabase
       .from('actions')
       .select(`
-        id, contact_id, action_type, action_area, suggested_ask, suggested_message, notes, priority,
+        id, contact_id, action_type, action_area, suggested_ask, suggested_message, notes, priority, status,
         contact:contacts(
           full_name, display_id, email, phone, notes,
           tags, date_added, town, state,
@@ -21,8 +23,8 @@ export default async function OutreachPage() {
       `)
       .eq('assigned_user_id', user?.id ?? '')
       .not('status', 'in', '("Done","Dropped","Skipped","Committed","Declined","Unresponsive")')
-      .order('priority', { ascending: true })
-      .order('due_date', { ascending: true })
+      .or(`due_date.is.null,due_date.lte.${todayStr}`)
+      .order('due_date', { ascending: true, nullsFirst: false })
 
     if (!error && data) actions = data
   } catch {

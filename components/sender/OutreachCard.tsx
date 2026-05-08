@@ -35,6 +35,7 @@ type Props = {
     suggested_message: string | null
     notes: string | null
     priority: string
+    status: string
     contact: Contact
   }
   userId: string
@@ -49,8 +50,7 @@ type LastInteraction = {
 const OUTCOMES = ['Yes', 'Maybe', 'No', 'No response', 'Needs more info', 'Wrong contact', 'Do not contact']
 
 function daysAgoLabel(dateStr: string) {
-  const d = new Date(dateStr)
-  const days = Math.floor((Date.now() - d.getTime()) / 86400000)
+  const days = Math.floor((Date.now() - new Date(dateStr).getTime()) / 86400000)
   if (days === 0) return 'today'
   if (days === 1) return 'yesterday'
   if (days < 30) return `${days}d ago`
@@ -58,11 +58,45 @@ function daysAgoLabel(dateStr: string) {
   return `${Math.floor(days / 365)}yr ago`
 }
 
+function randomFollowUpDate() {
+  const days = 3 + Math.floor(Math.random() * 3) // 3, 4, or 5
+  const d = new Date()
+  d.setDate(d.getDate() + days)
+  return d.toISOString().split('T')[0]
+}
+
+function stageUpdatesForOutreach(contact: Contact) {
+  const updates: Record<string, string> = {}
+  if (contact.is_volunteer && (!contact.volunteer_stage || contact.volunteer_stage === 'New')) {
+    updates.volunteer_stage = 'Contacted'
+  }
+  if (contact.is_donor && (!contact.donor_stage || ['Prospect', 'Not asked'].includes(contact.donor_stage))) {
+    updates.donor_stage = 'Asked'
+  }
+  return updates
+}
+
+function stageUpdatesForOutcome(outcome: string, contact: Contact) {
+  const updates: Record<string, unknown> = {}
+  if (outcome === 'Do not contact') {
+    updates.do_not_contact = true
+    return updates
+  }
+  if (['Yes', 'Maybe'].includes(outcome)) {
+    if (contact.is_volunteer) updates.volunteer_stage = 'Interested'
+    if (contact.is_donor) updates.donor_stage = 'Pledged'
+  } else if (outcome === 'No') {
+    if (contact.is_volunteer) updates.volunteer_stage = 'Not a fit'
+    if (contact.is_donor) updates.donor_stage = 'Lapsed'
+  }
+  return updates
+}
+
 export default function OutreachCard({ action, userId }: Props) {
   const supabase = createClient()
   const { contact } = action
 
-  const [mode, setMode] = useState<'idle' | 'reached' | 'done'>('idle')
+  const [mode, setMode] = useState<'idle' | 'responded' | 'done'>('idle')
   const [outcome, setOutcome] = useState('')
   const [notes, setNotes] = useState('')
   const [followUp, setFollowUp] = useState(false)
@@ -82,14 +116,42 @@ export default function OutreachCard({ action, userId }: Props) {
       .then(({ data }) => { if (data?.[0]) setLast(data[0]) })
   }, [action.contact_id])
 
-  async function quickLog(status: string) {
+  const interactionType = action.action_type === 'Call' ? 'Call' : action.action_type === 'Text' ? 'Text' : 'Email'
+  const actionLabel = action.action_type === 'Call' ? 'Called them' : action.action_type === 'Text' ? 'Texted them' : 'Emailed them'
+  const isFollowUp = action.status === 'Waiting on response'
+
+  // Log outreach sent — card disappears until follow-up date
+  async function logOutreach() {
     setSaving(true)
-    await supabase.from('actions').update({ status }).eq('id', action.id)
+    const today = new Date().toISOString().split('T')[0]
+    const followUpDue = randomFollowUpDate()
+
+    await supabase.from('actions').update({
+      status: 'Waiting on response',
+      due_date: followUpDue,
+    }).eq('id', action.id)
+
+    await supabase.from('interactions').insert({
+      contact_id: action.contact_id,
+      action_id: action.id,
+      interaction_date: today,
+      interaction_type: interactionType,
+      direction: 'Outbound',
+      owner: 'sender',
+      summary: `${actionLabel} — awaiting response`,
+    })
+
+    const stageUpdates = stageUpdatesForOutreach(contact)
+    if (Object.keys(stageUpdates).length > 0) {
+      await supabase.from('contacts').update(stageUpdates).eq('id', action.contact_id)
+    }
+
     setSaving(false)
-    if (status === 'Skipped') setMode('done')
+    setMode('done')
   }
 
-  async function handleSave() {
+  // Log a response from the contact — mark done, update pipeline
+  async function logResponse() {
     if (!outcome) return
     setSaving(true)
     const today = new Date().toISOString().split('T')[0]
@@ -97,19 +159,19 @@ export default function OutreachCard({ action, userId }: Props) {
     await supabase.from('actions').update({
       status: 'Done',
       outcome,
+      completed_date: today,
       follow_up_needed: followUp,
       follow_up_date: followUpDate || null,
-      completed_date: today,
     }).eq('id', action.id)
 
     await supabase.from('interactions').insert({
       contact_id: action.contact_id,
       action_id: action.id,
       interaction_date: today,
-      interaction_type: action.action_type === 'Call' ? 'Call' : action.action_type === 'Text' ? 'Text' : 'Email',
-      direction: 'Outbound',
+      interaction_type: interactionType,
+      direction: 'Inbound',
       owner: 'sender',
-      summary: notes || `Outcome: ${outcome}`,
+      summary: notes || `Response: ${outcome}`,
       result: outcome,
       follow_up_needed: followUp,
       follow_up_date: followUpDate || null,
@@ -129,8 +191,9 @@ export default function OutreachCard({ action, userId }: Props) {
       })
     }
 
-    if (outcome === 'Do not contact') {
-      await supabase.from('contacts').update({ do_not_contact: true }).eq('id', action.contact_id)
+    const stageUpdates = stageUpdatesForOutcome(outcome, contact)
+    if (Object.keys(stageUpdates).length > 0) {
+      await supabase.from('contacts').update(stageUpdates).eq('id', action.contact_id)
     }
 
     setSaving(false)
@@ -149,16 +212,20 @@ export default function OutreachCard({ action, userId }: Props) {
   const location = [contact.town, contact.state].filter(Boolean).join(', ')
   const tags = (contact.tags ?? []).filter(Boolean)
   const addedYear = contact.date_added ? new Date(contact.date_added).getFullYear() : null
-
   const actionTypeIcon = action.action_type === 'Call' ? '📞' : action.action_type === 'Text' ? '💬' : '✉️'
 
   return (
-    <div className="bg-white border border-gray-200 rounded-xl overflow-hidden">
+    <div className={`bg-white border rounded-xl overflow-hidden ${isFollowUp ? 'border-amber-200' : 'border-gray-200'}`}>
 
-      {/* ── Contact header ── */}
+      {/* Follow-up banner */}
+      {isFollowUp && (
+        <div className="bg-amber-50 border-b border-amber-100 px-4 py-2">
+          <p className="text-xs font-medium text-amber-700">↩ Follow-up — no response yet</p>
+        </div>
+      )}
+
+      {/* Contact header */}
       <div className="p-4 space-y-3">
-
-        {/* Name + priority + action type */}
         <div className="flex items-start justify-between gap-2">
           <Link
             href={`/outreach/contacts/${action.contact_id}`}
@@ -176,18 +243,13 @@ export default function OutreachCard({ action, userId }: Props) {
           </div>
         </div>
 
-        {/* Contact info + location */}
-        <div className="space-y-1">
+        <div className="space-y-0.5">
           <div className="flex flex-wrap gap-x-3 gap-y-0.5 text-sm">
             {contact.email && (
-              <a href={`mailto:${contact.email}`} className="text-blue-600 hover:underline">
-                {contact.email}
-              </a>
+              <a href={`mailto:${contact.email}`} className="text-blue-600 hover:underline">{contact.email}</a>
             )}
             {contact.phone && (
-              <a href={`tel:${contact.phone}`} className="text-gray-700 hover:text-gray-900">
-                {contact.phone}
-              </a>
+              <a href={`tel:${contact.phone}`} className="text-gray-700 hover:text-gray-900">{contact.phone}</a>
             )}
           </div>
           {(location || addedYear) && (
@@ -197,28 +259,23 @@ export default function OutreachCard({ action, userId }: Props) {
           )}
         </div>
 
-        {/* Tags (where they came from) */}
         {tags.length > 0 && (
           <div className="flex flex-wrap gap-1">
             {tags.map(t => (
-              <span key={t} className="text-xs bg-blue-50 text-blue-600 px-2 py-0.5 rounded-full border border-blue-100">
-                {t}
-              </span>
+              <span key={t} className="text-xs bg-blue-50 text-blue-600 px-2 py-0.5 rounded-full border border-blue-100">{t}</span>
             ))}
           </div>
         )}
 
-        {/* Last interaction */}
         {last ? (
           <div className="bg-gray-50 rounded-lg px-3 py-2.5">
             <p className="text-xs text-gray-400 font-medium mb-0.5">
               Last contact · {daysAgoLabel(last.interaction_date)}
             </p>
-            {last.summary ? (
-              <p className="text-sm text-gray-700 italic">"{last.summary}"</p>
-            ) : (
-              <p className="text-sm text-gray-400">No notes recorded</p>
-            )}
+            {last.summary
+              ? <p className="text-sm text-gray-700 italic">"{last.summary}"</p>
+              : <p className="text-sm text-gray-400">No notes recorded</p>
+            }
           </div>
         ) : (
           <div className="bg-gray-50 rounded-lg px-3 py-2">
@@ -226,7 +283,6 @@ export default function OutreachCard({ action, userId }: Props) {
           </div>
         )}
 
-        {/* Admin notes */}
         {(contact.notes || action.notes) && (
           <div className="space-y-1">
             {contact.notes && (
@@ -243,7 +299,6 @@ export default function OutreachCard({ action, userId }: Props) {
         )}
       </div>
 
-      {/* ── The ask ── */}
       {action.suggested_ask && (
         <div className="mx-4 mb-3 bg-blue-50 border border-blue-100 rounded-lg px-3 py-2.5">
           <p className="text-xs font-semibold text-blue-500 uppercase tracking-wide mb-0.5">Ask</p>
@@ -251,7 +306,6 @@ export default function OutreachCard({ action, userId }: Props) {
         </div>
       )}
 
-      {/* ── Suggested message (collapsed) ── */}
       {action.suggested_message && (
         <div className="mx-4 mb-4">
           <button
@@ -269,45 +323,43 @@ export default function OutreachCard({ action, userId }: Props) {
         </div>
       )}
 
-      {/* ── Log section ── */}
+      {/* Log section */}
       <div className="border-t border-gray-100 bg-gray-50 px-4 py-3">
 
         {mode === 'idle' && (
           <div className="flex flex-wrap gap-2">
             <button
-              onClick={() => setMode('reached')}
+              onClick={logOutreach}
+              disabled={saving}
+              className="bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium px-4 py-2 rounded-lg transition-colors disabled:opacity-50"
+            >
+              {saving ? 'Logging…' : actionLabel}
+            </button>
+            <button
+              onClick={() => setMode('responded')}
               disabled={saving}
               className="bg-green-600 hover:bg-green-700 text-white text-sm font-medium px-4 py-2 rounded-lg transition-colors disabled:opacity-50"
             >
-              ✓ Reached them
+              They responded
             </button>
             <button
-              onClick={() => quickLog('Waiting on response')}
+              onClick={async () => {
+                setSaving(true)
+                await supabase.from('actions').update({ status: 'Skipped' }).eq('id', action.id)
+                setSaving(false)
+                setMode('done')
+              }}
               disabled={saving}
-              className="bg-white border border-gray-300 hover:bg-gray-100 text-gray-700 text-sm font-medium px-4 py-2 rounded-lg transition-colors disabled:opacity-50"
-            >
-              Left a message
-            </button>
-            <button
-              onClick={() => quickLog('Contacted')}
-              disabled={saving}
-              className="bg-white border border-gray-300 hover:bg-gray-100 text-gray-700 text-sm font-medium px-4 py-2 rounded-lg transition-colors disabled:opacity-50"
-            >
-              No answer
-            </button>
-            <button
-              onClick={() => quickLog('Skipped')}
-              disabled={saving}
-              className="text-gray-400 hover:text-gray-600 text-sm px-2 py-2 transition-colors disabled:opacity-50 ml-auto"
+              className="text-gray-400 hover:text-gray-600 text-sm px-2 py-2 ml-auto transition-colors disabled:opacity-50"
             >
               Skip
             </button>
           </div>
         )}
 
-        {mode === 'reached' && (
+        {mode === 'responded' && (
           <div className="space-y-3">
-            <p className="text-sm font-semibold text-gray-900">How did it go?</p>
+            <p className="text-sm font-semibold text-gray-900">What did they say?</p>
 
             <Select value={outcome} onValueChange={(v) => setOutcome(v ?? '')}>
               <SelectTrigger className="h-9 text-sm bg-white">
@@ -321,8 +373,8 @@ export default function OutreachCard({ action, userId }: Props) {
             <Textarea
               value={notes}
               onChange={e => setNotes(e.target.value)}
-              placeholder="What did they say? (optional)"
-              className="text-sm h-20 resize-none bg-white"
+              placeholder="Notes (optional)"
+              className="text-sm h-16 resize-none bg-white"
             />
 
             <div className="flex items-center gap-3 flex-wrap">
@@ -346,17 +398,11 @@ export default function OutreachCard({ action, userId }: Props) {
             </div>
 
             <div className="flex gap-2">
-              <Button
-                onClick={handleSave}
-                disabled={saving || !outcome}
-                className="flex-1"
-                size="sm"
-              >
+              <Button onClick={logResponse} disabled={saving || !outcome} className="flex-1" size="sm">
                 {saving ? 'Saving…' : 'Save'}
               </Button>
               <Button
-                variant="outline"
-                size="sm"
+                variant="outline" size="sm"
                 onClick={() => { setMode('idle'); setOutcome(''); setNotes('') }}
                 disabled={saving}
               >
