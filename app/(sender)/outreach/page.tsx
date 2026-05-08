@@ -23,10 +23,14 @@ export default async function OutreachPage() {
       `)
       .eq('assigned_user_id', user?.id ?? '')
       .not('status', 'in', '("Done","Dropped","Skipped","Committed","Declined","Unresponsive")')
-      .or(`due_date.is.null,due_date.lte.${todayStr}`)
       .order('due_date', { ascending: true, nullsFirst: false })
 
-    if (!error && data) actions = data
+    if (!error && data) {
+      // Only hide "Waiting on response" cards whose follow-up date hasn't arrived yet
+      actions = data.filter((a: any) =>
+        !(a.status === 'Waiting on response' && a.due_date && a.due_date > todayStr)
+      )
+    }
   } catch {
     // show empty state rather than crashing
   }
