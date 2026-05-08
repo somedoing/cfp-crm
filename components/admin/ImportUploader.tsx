@@ -390,8 +390,20 @@ export default function ImportUploader() {
   async function handlePreview() {
     setLoading(true)
     const emailCol = Object.entries(fieldMap).find(([, v]) => v === 'email')?.[0]
+
+    // Deduplicate within the CSV itself — keep the first occurrence of each email,
+    // skip later rows for the same email (they're the same person submitted twice)
+    const seenEmails = new Set<string>()
+    const deduped = rows.filter(row => {
+      const email = emailCol ? normalizeEmail(row[emailCol] ?? '') : ''
+      if (!email) return true // no email — can't dedupe, keep it
+      if (seenEmails.has(email)) return false
+      seenEmails.add(email)
+      return true
+    })
+
     const emails = emailCol
-      ? rows.map(r => normalizeEmail(r[emailCol] ?? '')).filter(Boolean)
+      ? deduped.map(r => normalizeEmail(r[emailCol] ?? '')).filter(Boolean)
       : []
 
     const { data: existingContacts } = emails.length
@@ -400,7 +412,7 @@ export default function ImportUploader() {
 
     const emailMap = new Map((existingContacts ?? []).map(c => [normalizeEmail(c.email), c]))
 
-    const reviewed: ReviewRow[] = rows.map(row => {
+    const reviewed: ReviewRow[] = deduped.map(row => {
       const email = emailCol ? normalizeEmail(row[emailCol] ?? '') : ''
       const match = email ? emailMap.get(email) : undefined
       const roles = getRoleLabels(row, fieldMap)
