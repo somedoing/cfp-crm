@@ -51,6 +51,13 @@ type LastInteraction = {
 
 const OUTCOMES = ['Yes', 'Maybe', 'No', 'No response', 'Needs more info', 'Wrong contact', 'Do not contact']
 
+const METHODS = [
+  { label: 'Emailed them',       type: 'Email'     },
+  { label: 'Called them',        type: 'Call'      },
+  { label: 'Texted them',        type: 'Text'      },
+  { label: 'Spoke in person',    type: 'In-person' },
+] as const
+
 function daysAgoLabel(dateStr: string) {
   const days = Math.floor((Date.now() - new Date(dateStr).getTime()) / 86400000)
   if (days === 0) return 'today'
@@ -99,6 +106,8 @@ export default function OutreachCard({ action, userId, today }: Props) {
   const { contact } = action
 
   const [mode, setMode] = useState<'idle' | 'responded' | 'done'>('idle')
+  const [method, setMethod] = useState<typeof METHODS[number]>(METHODS[0])
+  const [methodOpen, setMethodOpen] = useState(false)
   const [outcome, setOutcome] = useState('')
   const [notes, setNotes] = useState('')
   const [followUp, setFollowUp] = useState(false)
@@ -118,15 +127,13 @@ export default function OutreachCard({ action, userId, today }: Props) {
       .then(({ data }) => { if (data?.[0]) setLast(data[0]) })
   }, [action.contact_id])
 
-  const interactionType = action.action_type === 'Call' ? 'Call' : action.action_type === 'Text' ? 'Text' : 'Email'
-  const actionLabel = action.action_type === 'Call' ? 'Called them' : action.action_type === 'Text' ? 'Texted them' : 'Emailed them'
   // Only show follow-up banner when in the follow-up tab (due date has passed)
   const isFollowUp = action.status === 'Waiting on response' && (!action.due_date || action.due_date <= today)
 
   // Log outreach sent — card disappears until follow-up date
   async function logOutreach() {
     setSaving(true)
-    const today = new Date().toISOString().split('T')[0]
+    const todayDate = new Date().toISOString().split('T')[0]
     const followUpDue = randomFollowUpDate()
 
     await supabase.from('actions').update({
@@ -137,11 +144,11 @@ export default function OutreachCard({ action, userId, today }: Props) {
     await supabase.from('interactions').insert({
       contact_id: action.contact_id,
       action_id: action.id,
-      interaction_date: today,
-      interaction_type: interactionType,
+      interaction_date: todayDate,
+      interaction_type: method.type,
       direction: 'Outbound',
       owner: 'sender',
-      summary: `${actionLabel} — awaiting response`,
+      summary: `${method.label} — awaiting response`,
     })
 
     const stageUpdates = stageUpdatesForOutreach(contact)
@@ -171,7 +178,7 @@ export default function OutreachCard({ action, userId, today }: Props) {
       contact_id: action.contact_id,
       action_id: action.id,
       interaction_date: today,
-      interaction_type: interactionType,
+      interaction_type: method.type,
       direction: 'Inbound',
       owner: 'sender',
       summary: notes || `Response: ${outcome}`,
@@ -331,13 +338,43 @@ export default function OutreachCard({ action, userId, today }: Props) {
 
         {mode === 'idle' && (
           <div className="flex flex-wrap gap-2">
-            <button
-              onClick={logOutreach}
-              disabled={saving}
-              className="bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium px-4 py-2 rounded-lg transition-colors disabled:opacity-50"
-            >
-              {saving ? 'Logging…' : actionLabel}
-            </button>
+            {/* Split button: main action + method picker */}
+            <div className="relative flex">
+              <button
+                onClick={logOutreach}
+                disabled={saving}
+                className="bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium pl-4 pr-3 py-2 rounded-l-lg transition-colors disabled:opacity-50"
+              >
+                {saving ? 'Logging…' : method.label}
+              </button>
+              <div className="w-px bg-blue-500 self-stretch" />
+              <button
+                onClick={() => setMethodOpen(!methodOpen)}
+                disabled={saving}
+                className="bg-blue-600 hover:bg-blue-700 text-white px-2 py-2 rounded-r-lg transition-colors disabled:opacity-50"
+                aria-label="Choose contact method"
+              >
+                <span className="text-xs leading-none">▾</span>
+              </button>
+              {methodOpen && (
+                <>
+                  <div className="fixed inset-0 z-10" onClick={() => setMethodOpen(false)} />
+                  <div className="absolute top-full left-0 mt-1 bg-white border border-gray-200 rounded-lg shadow-lg z-20 min-w-[170px]">
+                    {METHODS.map(m => (
+                      <button
+                        key={m.type}
+                        onClick={() => { setMethod(m); setMethodOpen(false) }}
+                        className={`w-full text-left px-3 py-2 text-sm hover:bg-gray-50 first:rounded-t-lg last:rounded-b-lg ${
+                          method.type === m.type ? 'text-blue-600 font-medium' : 'text-gray-700'
+                        }`}
+                      >
+                        {m.label}
+                      </button>
+                    ))}
+                  </div>
+                </>
+              )}
+            </div>
             <button
               onClick={() => setMode('responded')}
               disabled={saving}
