@@ -12,7 +12,7 @@ import Link from 'next/link'
 import type { Action } from '@/types'
 
 type Props = {
-  action: Action & { contact: { full_name: string; display_id: string; email: string; phone: string; last_contact_summary: string; notes: string } }
+  action: Action & { contact: { full_name: string; display_id: string; email: string; phone: string; notes: string } }
 }
 
 const OUTCOMES = ['Yes', 'Maybe', 'No', 'No response', 'Needs more info', 'Wrong contact', 'Do not contact']
@@ -128,12 +128,6 @@ export default function OutreachCard({ action }: Props) {
             <p className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-0.5">Suggested message</p>
             <p className="text-sm text-gray-700 whitespace-pre-wrap">{action.suggested_message}</p>
           </div>
-        )}
-
-        {action.contact.last_contact_summary && (
-          <p className="text-xs text-gray-500">
-            <span className="font-medium">Last contact:</span> {action.contact.last_contact_summary}
-          </p>
         )}
 
         {action.notes && (

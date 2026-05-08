@@ -8,7 +8,7 @@ export default async function OutreachPage() {
 
   const { data: actions } = await supabase
     .from('actions')
-    .select('*, contact:contacts(full_name, display_id, email, phone, last_contact_summary, notes)')
+    .select('*, contact:contacts(full_name, display_id, email, phone, notes)')
     .eq('assigned_user_id', user?.id ?? '')
     .not('status', 'in', '("Done","Dropped","Skipped","Committed","Declined","Unresponsive")')
     .order('priority', { ascending: true })
