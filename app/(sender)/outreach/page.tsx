@@ -36,7 +36,7 @@ export default async function OutreachPage() {
   return (
     <div className="space-y-4">
       <div>
-        <h1 className="text-xl font-semibold text-gray-900">Your Outreach Queue</h1>
+        <h1 className="text-xl font-semibold text-gray-900">Outreach Queue</h1>
         <p className="text-sm text-gray-500 mt-0.5">{todayLabel}</p>
       </div>
 
