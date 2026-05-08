@@ -223,11 +223,11 @@ export default function OutreachCard({ action, userId, today, onActionUpdate }: 
   ].filter(Boolean)
 
   return (
-    <div className={`bg-white border rounded-xl overflow-hidden ${isFollowUp ? 'border-amber-200' : 'border-gray-200'}`}>
+    <div className={`bg-white border rounded-xl ${isFollowUp ? 'border-amber-200' : 'border-gray-200'}`}>
 
       {/* Follow-up banner */}
       {isFollowUp && (
-        <div className="bg-amber-50 border-b border-amber-100 px-4 py-2">
+        <div className="bg-amber-50 border-b border-amber-100 px-4 py-2 rounded-t-xl">
           <p className="text-xs font-medium text-amber-700">↩ Follow-up — no response yet</p>
         </div>
       )}
@@ -347,7 +347,7 @@ export default function OutreachCard({ action, userId, today, onActionUpdate }: 
       )}
 
       {/* Log section */}
-      <div className="border-t border-gray-100 bg-gray-50 px-4 py-3">
+      <div className="border-t border-gray-100 bg-gray-50 px-4 py-3 rounded-b-xl">
 
         {mode === 'idle' && (
           <div className="flex flex-wrap gap-2">
