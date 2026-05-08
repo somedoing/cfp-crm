@@ -6,7 +6,7 @@ import OutreachCard from './OutreachCard'
 type Tab = 'to-contact' | 'waiting' | 'follow-up'
 
 export default function OutreachTabs({
-  actions,
+  actions: initialActions,
   userId,
   today,
 }: {
@@ -15,10 +15,16 @@ export default function OutreachTabs({
   today: string
 }) {
   const [tab, setTab] = useState<Tab>('to-contact')
+  const [actions, setActions] = useState(initialActions)
 
-  const toContact = actions.filter(a => a.status !== 'Waiting on response')
-  const waiting   = actions.filter(a => a.status === 'Waiting on response' && a.due_date && a.due_date > today)
-  const followUp  = actions.filter(a => a.status === 'Waiting on response' && (!a.due_date || a.due_date <= today))
+  function handleActionUpdate(id: string, updates: { status: string; due_date?: string | null }) {
+    setActions(prev => prev.map(a => a.id === id ? { ...a, ...updates } : a))
+  }
+
+  const active    = actions.filter(a => !['Done', 'Dropped', 'Skipped'].includes(a.status))
+  const toContact = active.filter(a => a.status !== 'Waiting on response')
+  const waiting   = active.filter(a => a.status === 'Waiting on response' && a.due_date && a.due_date > today)
+  const followUp  = active.filter(a => a.status === 'Waiting on response' && (!a.due_date || a.due_date <= today))
 
   const current = tab === 'to-contact' ? toContact : tab === 'waiting' ? waiting : followUp
 
@@ -89,7 +95,13 @@ export default function OutreachTabs({
       {current.length > 0 ? (
         <div className="space-y-3">
           {current.map((action: any) => (
-            <OutreachCard key={action.id} action={action} userId={userId} today={today} />
+            <OutreachCard
+              key={action.id}
+              action={action}
+              userId={userId}
+              today={today}
+              onActionUpdate={handleActionUpdate}
+            />
           ))}
         </div>
       ) : (

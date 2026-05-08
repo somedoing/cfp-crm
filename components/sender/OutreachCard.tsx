@@ -41,6 +41,7 @@ type Props = {
   }
   userId: string
   today: string
+  onActionUpdate: (id: string, updates: { status: string; due_date?: string | null }) => void
 }
 
 type LastInteraction = {
@@ -101,11 +102,11 @@ function stageUpdatesForOutcome(outcome: string, contact: Contact) {
   return updates
 }
 
-export default function OutreachCard({ action, userId, today }: Props) {
+export default function OutreachCard({ action, userId, today, onActionUpdate }: Props) {
   const supabase = createClient()
   const { contact } = action
 
-  const [mode, setMode] = useState<'idle' | 'responded' | 'done'>('idle')
+  const [mode, setMode] = useState<'idle' | 'responded'>('idle')
   const [method, setMethod] = useState<typeof METHODS[number]>(METHODS[0])
   const [methodOpen, setMethodOpen] = useState(false)
   const [outcome, setOutcome] = useState('')
@@ -157,7 +158,7 @@ export default function OutreachCard({ action, userId, today }: Props) {
     }
 
     setSaving(false)
-    setMode('done')
+    onActionUpdate(action.id, { status: 'Waiting on response', due_date: followUpDue })
   }
 
   // Log a response from the contact — mark done, update pipeline
@@ -207,16 +208,7 @@ export default function OutreachCard({ action, userId, today }: Props) {
     }
 
     setSaving(false)
-    setMode('done')
-  }
-
-  if (mode === 'done') {
-    return (
-      <div className="bg-white border border-gray-200 rounded-xl p-4 opacity-40 flex items-center justify-between">
-        <span className="font-medium text-gray-700">{contact.full_name}</span>
-        <span className="text-xs text-green-600 font-medium">Logged ✓</span>
-      </div>
-    )
+    onActionUpdate(action.id, { status: 'Done' })
   }
 
   const location = [contact.town, contact.state].filter(Boolean).join(', ')
@@ -387,7 +379,7 @@ export default function OutreachCard({ action, userId, today }: Props) {
                 setSaving(true)
                 await supabase.from('actions').update({ status: 'Skipped' }).eq('id', action.id)
                 setSaving(false)
-                setMode('done')
+                onActionUpdate(action.id, { status: 'Skipped' })
               }}
               disabled={saving}
               className="text-gray-400 hover:text-gray-600 text-sm px-2 py-2 ml-auto transition-colors disabled:opacity-50"
