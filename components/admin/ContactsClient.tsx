@@ -11,7 +11,9 @@ import { ALL_TAGS } from '@/lib/tags'
 type Contact = {
   id: string
   display_id: string | null
-  full_name: string
+  first_name: string | null
+  last_name: string | null
+  full_name: string | null
   email: string | null
   phone: string | null
   town: string | null
