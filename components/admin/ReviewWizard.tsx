@@ -491,18 +491,17 @@ const WizardCard = forwardRef<WizardCardHandle, {
   const [zip, setZip] = useState(contact.zip ?? '')
   const [notes, setNotes] = useState(contact.notes ?? '')
   const [tags, setTags] = useState<string[]>(contact.tags ?? [])
-  const [donations, setDonations] = useState<{ id: string; interaction_date: string | null; summary: string | null }[]>([])
+  const [interactions, setInteractions] = useState<{ id: string; interaction_type: string; interaction_date: string | null; summary: string | null }[]>([])
   const [saving, setSaving] = useState(false)
 
   useEffect(() => {
-    if (!contact.is_donor) { setDonations([]); return }
     supabase
       .from('interactions')
-      .select('id, interaction_date, summary')
+      .select('id, interaction_type, interaction_date, summary')
       .eq('contact_id', contact.id)
-      .eq('interaction_type', 'Donation')
+      .in('interaction_type', ['Donation', 'Volunteer Signup', 'Sig Collector Signup'])
       .order('interaction_date', { ascending: false })
-      .then(({ data }) => setDonations(data ?? []))
+      .then(({ data }) => setInteractions(data ?? []))
   }, [contact.id])
 
   async function addTag(tag: string) {
@@ -591,52 +590,45 @@ const WizardCard = forwardRef<WizardCardHandle, {
           {contact.display_id && <span className="text-xs text-gray-400 font-mono shrink-0">{contact.display_id}</span>}
         </div>
 
-        {/* What they did — the main thing you need to know */}
-        <div className="rounded-lg border border-gray-200 px-3 py-2.5 space-y-1.5">
-          {contact.is_donor && (
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <span className="w-2 h-2 rounded-full bg-green-500 shrink-0" />
-                <span className="text-sm font-semibold text-gray-900">Donated</span>
-              </div>
-              <span className="text-xs text-gray-400">{dateAdded ?? 'date unknown'}</span>
+        {/* Action timeline — what they did and when */}
+        <div className="rounded-lg border border-gray-200 divide-y divide-gray-100">
+          {interactions.length === 0 && !contact.newsletter_subscriber && (
+            <div className="px-3 py-2 flex items-center gap-2">
+              <span className="w-2 h-2 rounded-full bg-amber-400 shrink-0" />
+              <span className="text-sm text-amber-700">No actions on record</span>
             </div>
           )}
-          {contact.is_volunteer && (
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <span className="w-2 h-2 rounded-full bg-blue-500 shrink-0" />
-                <span className="text-sm font-semibold text-gray-900">Signed up to volunteer</span>
+          {interactions.map(i => {
+            const date = i.interaction_date
+              ? new Date(i.interaction_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+              : 'date unknown'
+            const dotColor =
+              i.interaction_type === 'Donation' ? 'bg-green-500' :
+              i.interaction_type === 'Volunteer Signup' ? 'bg-blue-500' :
+              'bg-purple-500'
+            const label =
+              i.interaction_type === 'Donation' ? 'Donated' :
+              i.interaction_type === 'Volunteer Signup' ? 'Signed up to volunteer' :
+              'Signed up to collect signatures'
+            return (
+              <div key={i.id} className="px-3 py-2 flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <span className={`w-2 h-2 rounded-full shrink-0 ${dotColor}`} />
+                  <span className="text-sm font-medium text-gray-900">{label}</span>
+                  {i.summary && <span className="text-xs text-gray-400 hidden sm:inline">· {i.summary}</span>}
+                </div>
+                <span className="text-xs text-gray-400 shrink-0">{date}</span>
               </div>
-              <span className="text-xs text-gray-400">{dateAdded ?? 'date unknown'}</span>
-            </div>
-          )}
-          {contact.is_signature_collector && (
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <span className="w-2 h-2 rounded-full bg-purple-500 shrink-0" />
-                <span className="text-sm font-semibold text-gray-900">Signed up to collect signatures</span>
-              </div>
-              <span className="text-xs text-gray-400">{dateAdded ?? 'date unknown'}</span>
-            </div>
-          )}
+            )
+          })}
           {contact.newsletter_subscriber && (
-            <div className="flex items-center justify-between">
+            <div className="px-3 py-2 flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <span className="w-2 h-2 rounded-full bg-gray-400 shrink-0" />
-                <span className="text-sm text-gray-700">Newsletter subscriber</span>
+                <span className="text-sm text-gray-600">Newsletter subscriber</span>
               </div>
               <span className="text-xs text-gray-400">{dateAdded ?? 'date unknown'}</span>
             </div>
-          )}
-          {!contact.is_donor && !contact.is_volunteer && !contact.is_signature_collector && !contact.newsletter_subscriber && (
-            <div className="flex items-center gap-2">
-              <span className="w-2 h-2 rounded-full bg-amber-400 shrink-0" />
-              <span className="text-sm text-amber-700">No specific action on record</span>
-            </div>
-          )}
-          {contact.original_source_form && contact.original_source_form !== 'Squarespace Contacts Export' && (
-            <p className="text-xs text-gray-400 pt-0.5">via {contact.original_source_form}</p>
           )}
         </div>
 
@@ -675,20 +667,6 @@ const WizardCard = forwardRef<WizardCardHandle, {
         </span>
       )}
 
-      {/* Donation history */}
-      {contact.is_donor && (
-        <div className="rounded-lg bg-green-50 border border-green-100 px-3 py-2">
-          <p className="text-xs font-medium text-green-700 mb-1">Donation history</p>
-          {donations.length === 0
-            ? <p className="text-xs text-green-600">Marked as donor — no detailed records</p>
-            : donations.map(d => (
-                <p key={d.id} className="text-xs text-green-800">
-                  {d.interaction_date ?? '—'} · {d.summary}
-                </p>
-              ))
-          }
-        </div>
-      )}
 
       {/* Stages — only show when the relevant flag is active */}
       <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">

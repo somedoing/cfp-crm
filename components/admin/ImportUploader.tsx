@@ -102,8 +102,10 @@ function parseCSV(text: string): ParsedRow[] {
 
 // ─── Smart default field mapping ──────────────────────────────────────────────
 
-function guessFieldMapping(columnName: string): string {
+function guessFieldMapping(columnName: string, sampleValue?: string): string {
   const col = columnName.toLowerCase().trim()
+  // Blank-header column — if the sample value looks like a phone number, treat it as phone
+  if (!col && sampleValue && /^\+?[\d\s()\-\.]{7,}$/.test(sampleValue.trim())) return 'phone'
   // Squarespace form timestamp column (named after timezone e.g. "America/New_York")
   if (col.startsWith('america/') || col.startsWith('us/') || col.startsWith('utc')) return 'date_added'
   if (col === 'email') return 'email'
@@ -132,6 +134,7 @@ function guessFieldMapping(columnName: string): string {
   if (col === 'donation count') return 'donation_count'
   if (col === 'total donation amount') return 'donation_amount'
   if (col === 'created on' || col === 'subscriber since' || col === 'member since') return 'date_added'
+  if (col === 'last donation date' || col === 'last order date') return 'last_donation_date'
   if (col === 'subscriber source') return 'subscriber_source'
   // Notes — volunteer interest fields, messages, free text
   if (col === 'notes' || col === 'note' || col === 'message' || col === 'tags') return 'notes'
@@ -142,8 +145,8 @@ function guessFieldMapping(columnName: string): string {
   return 'ignore'
 }
 
-function buildDefaultFieldMap(headers: string[]): FieldMap {
-  return Object.fromEntries(headers.map(h => [h, guessFieldMapping(h)]))
+function buildDefaultFieldMap(headers: string[], sampleRow: ParsedRow): FieldMap {
+  return Object.fromEntries(headers.map(h => [h, guessFieldMapping(h, sampleRow[h])]))
 }
 
 // ─── NH Town detection ────────────────────────────────────────────────────────
@@ -291,6 +294,12 @@ function applyFieldMap(row: ParsedRow, fieldMap: FieldMap, sourceForm: string): 
         if (!isNaN(parsed.getTime())) contact.date_added = parsed.toISOString().split('T')[0]
         break
       }
+      case 'last_donation_date': {
+        const cleaned = val.replace(/\s+at\s+/i, ' ').replace(/\s+(EDT|EST|CDT|CST|PDT|PST|MDT|MST)\s*$/i, '')
+        const parsed = new Date(cleaned)
+        if (!isNaN(parsed.getTime())) contact._last_donation_date = parsed.toISOString().split('T')[0]
+        break
+      }
       case 'subscriber_source':
         if (val) notesParts.push(`Squarespace source: ${val}`)
         break
@@ -374,7 +383,7 @@ export default function ImportUploader() {
     const h = Object.keys(parsed[0])
     setRows(parsed)
     setHeaders(h)
-    setFieldMap(buildDefaultFieldMap(h))
+    setFieldMap(buildDefaultFieldMap(h, parsed[0]))
     if (parsed[0] && 'Mailing Lists' in parsed[0]) setSourceForm('Squarespace Contacts Export')
   }
 
@@ -425,8 +434,10 @@ export default function ImportUploader() {
       const firstName = (contactData.first_name as string) ?? ''
       const donationCount = contactData._donation_count as number | undefined
       const donationAmount = contactData._donation_amount as number | undefined
+      const lastDonationDate = contactData._last_donation_date as string | undefined
       delete contactData._donation_count
       delete contactData._donation_amount
+      delete contactData._last_donation_date
 
       let contactId: string
       if (row._action === 'merge' && row._match) {
@@ -491,9 +502,53 @@ export default function ImportUploader() {
             contact_id: contactId,
             interaction_type: 'Donation',
             direction: 'Inbound',
-            interaction_date: (contactData.date_added as string) || new Date().toISOString().split('T')[0],
+            interaction_date: lastDonationDate || (contactData.date_added as string) || new Date().toISOString().split('T')[0],
             summary: parts.join(' — '),
             notes: `From ${sourceForm} import`,
+          })
+        }
+      }
+
+      // Log volunteer signup interaction
+      if (contactData.is_volunteer) {
+        let shouldLog = row._action === 'create'
+        if (row._action === 'merge') {
+          const { count } = await supabase
+            .from('interactions')
+            .select('id', { count: 'exact', head: true })
+            .eq('contact_id', contactId)
+            .eq('interaction_type', 'Volunteer Signup')
+          shouldLog = (count ?? 0) === 0
+        }
+        if (shouldLog) {
+          await supabase.from('interactions').insert({
+            contact_id: contactId,
+            interaction_type: 'Volunteer Signup',
+            direction: 'Inbound',
+            interaction_date: (contactData.date_added as string) || new Date().toISOString().split('T')[0],
+            summary: sourceForm !== 'Squarespace Contacts Export' ? `via ${sourceForm}` : 'Volunteer (from Squarespace)',
+          })
+        }
+      }
+
+      // Log sig collector signup interaction
+      if (contactData.is_signature_collector) {
+        let shouldLog = row._action === 'create'
+        if (row._action === 'merge') {
+          const { count } = await supabase
+            .from('interactions')
+            .select('id', { count: 'exact', head: true })
+            .eq('contact_id', contactId)
+            .eq('interaction_type', 'Sig Collector Signup')
+          shouldLog = (count ?? 0) === 0
+        }
+        if (shouldLog) {
+          await supabase.from('interactions').insert({
+            contact_id: contactId,
+            interaction_type: 'Sig Collector Signup',
+            direction: 'Inbound',
+            interaction_date: (contactData.date_added as string) || new Date().toISOString().split('T')[0],
+            summary: sourceForm !== 'Squarespace Contacts Export' ? `via ${sourceForm}` : 'Sig collector (from Squarespace)',
           })
         }
       }
