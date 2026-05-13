@@ -17,6 +17,7 @@ const SOURCE_FORMS = [
   'Signature Collector Signup',
   'Newsletter Signup',
   'Donation Form',
+  'Donorbox Export',
   'General Contact Form',
   'Event Signup',
   'Pledge Form',
@@ -324,7 +325,7 @@ function applyFieldMap(row: ParsedRow, fieldMap: FieldMap, sourceForm: string): 
   if (sourceForm === 'Volunteer Interest Form') { contact.is_volunteer = true; if (!contact.volunteer_stage) contact.volunteer_stage = 'New' }
   if (sourceForm === 'Signature Collector Signup') { contact.is_volunteer = true; contact.is_signature_collector = true; if (!contact.signature_stage) contact.signature_stage = 'New lead' }
   if (sourceForm === 'Newsletter Signup') { contact.newsletter_subscriber = true; contact.email_opt_in = true }
-  if (sourceForm === 'Donation Form' && !contact.is_donor) { contact.donor_stage = contact.donor_stage ?? 'Prospect' }
+  if (sourceForm === 'Donation Form' || sourceForm === 'Donorbox Export') { contact.is_donor = true; contact.donor_stage = (contact.donor_stage as string) ?? 'Donated' }
   if (sourceForm === 'Pledge Form') { contact.is_volunteer = true; if (!contact.volunteer_stage) contact.volunteer_stage = 'New' }
 
   // NH town detection: if no town found, check notes for NH town names
