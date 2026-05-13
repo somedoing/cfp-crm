@@ -13,7 +13,7 @@ import Link from 'next/link'
 
 const VOLUNTEER_STAGES = ['New','Contacted','Interested','Asked','Assigned','Active','Reliable','Lead','Paused','Inactive','Not a fit']
 const PRIORITIES = ['High', 'Medium', 'Low']
-const SOURCES = ['Website', 'Canvassing', 'Phone bank', 'Event', 'Referral', 'Social media', 'Email', 'Walk-in', 'Other']
+const SOURCES = ['Website', 'Canvassing', 'Phone bank', 'Event', 'Referral', 'Social media', 'Email', 'Walk-in', 'Pledge', 'Other']
 
 export default function NewContactForm() {
   const router = useRouter()
