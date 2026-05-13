@@ -132,7 +132,7 @@ create sequence if not exists contact_display_seq start 1;
 create or replace function set_contact_display_id()
 returns trigger as $$
 begin
-  new.display_id := 'CFP-' || lpad(nextval('contact_display_seq')::text, 4, '0');
+  new.display_id := 'CFP-' || nextval('contact_display_seq')::text;
   return new;
 end;
 $$ language plpgsql;
