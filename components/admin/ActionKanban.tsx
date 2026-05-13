@@ -52,10 +52,14 @@ type Action = {
 
 function getColKey(action: Action): ColKey {
   const s = action.status
+  const today = new Date().toISOString().split('T')[0]
   if (CLOSED_STATUSES.includes(s)) return 'closed'
   if (s === 'Needs Review') return 'needs-review'
   if (s === 'To Contact' || s === 'Ready to Contact' || s === 'Waiting to contact' || s === 'Assigned to Jon') return 'queued'
-  if (s === 'Contacted' || s === 'Waiting on response') return 'contacted'
+  if (s === 'Contacted' || s === 'Waiting on response') {
+    if (action.due_date && action.due_date <= today) return 'followup'
+    return 'contacted'
+  }
   if (s === 'Follow-up') return 'followup'
   if (s === 'Positive Response' || s === 'Responded') return 'positive'
   if (s === 'Supporter') return 'supporter'
@@ -107,6 +111,11 @@ export default function ActionKanban({
       updated_at: ts,
     }
     if (col.key === 'contacted' || col.key === 'followup') updates.sent_at = ts
+    if (col.key === 'contacted') {
+      const d = new Date()
+      d.setDate(d.getDate() + 5)
+      updates.due_date = d.toISOString().split('T')[0]
+    }
     // When moving OUT of the queued column, clear the assigned user
     if (col.key !== 'queued') updates.assigned_user_id = null
 
