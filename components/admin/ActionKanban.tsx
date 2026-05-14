@@ -89,7 +89,14 @@ export default function ActionKanban({
     const map = Object.fromEntries(COLUMNS.map(c => [c.key, [] as Action[]])) as Record<ColKey, Action[]>
     for (const a of actions) map[getColKey(a)].push(a)
     for (const col of COLUMNS) {
-      if (col.key !== 'closed') {
+      if (col.key === 'queued') {
+        // Newest contact first so fresh leads are at the top
+        map[col.key].sort((a, b) => {
+          const dateA = a.contact?.date_added ?? a.updated_at ?? ''
+          const dateB = b.contact?.date_added ?? b.updated_at ?? ''
+          return dateB.localeCompare(dateA)
+        })
+      } else if (col.key !== 'closed') {
         map[col.key].sort((a, b) => (PRIORITY_ORDER[a.priority] ?? 3) - (PRIORITY_ORDER[b.priority] ?? 3))
       }
     }
