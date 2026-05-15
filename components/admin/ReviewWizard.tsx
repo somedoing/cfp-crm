@@ -144,8 +144,9 @@ export default function ReviewWizard({
       .filter(c => !c.reviewed_at && !c.do_not_contact && (!namesOnly || hasName(c)))
       .sort((a, b) => {
         if (groupByTag) {
-          const aHas = (a.tags ?? []).includes(groupByTag)
-          const bHas = (b.tags ?? []).includes(groupByTag)
+          const hasTag = (tags: string[]) => tags.some(t => t === groupByTag || t.startsWith(groupByTag + ' '))
+          const aHas = hasTag(a.tags ?? [])
+          const bHas = hasTag(b.tags ?? [])
           if (aHas && !bHas) return -1
           if (!aHas && bHas) return 1
         }
