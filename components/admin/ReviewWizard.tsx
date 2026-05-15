@@ -116,6 +116,8 @@ export default function ReviewWizard({
   const [pipelineError, setPipelineError] = useState<string>('')
   const [retagging, setRetagging] = useState(false)
   const [retagResult, setRetagResult] = useState<string>('')
+  const [groupByTag, setGroupByTag] = useState<string>('')
+  const [namesOnly, setNamesOnly] = useState(false)
   const cardRef = useRef<{ saveAll: () => Promise<void> } | null>(null)
 
   async function runRetag() {
@@ -131,16 +133,29 @@ export default function ReviewWizard({
     setRetagging(false)
   }
 
-  // Queue: unreviewed (newest first) then reviewed (oldest reviewed first)
+  // Reset to first card whenever filters change
+  useEffect(() => { setIndex(0) }, [groupByTag, namesOnly])
+
+  // Queue: unreviewed (tag group first, then newest) then reviewed (oldest reviewed first)
   const { unreviewed, reviewed, queue } = useMemo(() => {
+    const hasName = (c: ReviewContact) => !!(c.first_name?.trim() && c.last_name?.trim())
+
     const unreviewed = contacts
-      .filter(c => !c.reviewed_at && !c.do_not_contact)
-      .sort((a, b) => (b.date_added ?? '').localeCompare(a.date_added ?? ''))
+      .filter(c => !c.reviewed_at && !c.do_not_contact && (!namesOnly || hasName(c)))
+      .sort((a, b) => {
+        if (groupByTag) {
+          const aHas = (a.tags ?? []).includes(groupByTag)
+          const bHas = (b.tags ?? []).includes(groupByTag)
+          if (aHas && !bHas) return -1
+          if (!aHas && bHas) return 1
+        }
+        return (b.date_added ?? '').localeCompare(a.date_added ?? '')
+      })
     const reviewed = contacts
-      .filter(c => !!c.reviewed_at && !c.do_not_contact)
+      .filter(c => !!c.reviewed_at && !c.do_not_contact && (!namesOnly || hasName(c)))
       .sort((a, b) => (a.reviewed_at ?? '').localeCompare(b.reviewed_at ?? ''))
     return { unreviewed, reviewed, queue: [...unreviewed, ...reviewed] }
-  }, [contacts])
+  }, [contacts, groupByTag, namesOnly])
 
   const contact = queue[index] ?? null
   const isReviewedSection = index >= unreviewed.length
@@ -275,6 +290,33 @@ export default function ReviewWizard({
       {retagResult && (
         <p className="text-xs text-gray-500 text-right">{retagResult}</p>
       )}
+
+      {/* Filters */}
+      <div className="flex flex-wrap items-center gap-2">
+        <select
+          value={groupByTag}
+          onChange={e => setGroupByTag(e.target.value)}
+          className="text-xs border border-gray-200 rounded-lg px-2 py-1.5 text-gray-600 bg-white focus:outline-none focus:ring-1 focus:ring-blue-400"
+        >
+          <option value="">Group by tag…</option>
+          {ALL_TAGS.map(t => <option key={t} value={t}>{t}</option>)}
+        </select>
+        {groupByTag && (
+          <button onClick={() => setGroupByTag('')} className="text-xs text-gray-400 hover:text-gray-600">
+            Clear
+          </button>
+        )}
+        <button
+          onClick={() => setNamesOnly(v => !v)}
+          className={`text-xs px-3 py-1.5 rounded-lg border font-medium transition-colors ${
+            namesOnly
+              ? 'bg-gray-900 text-white border-gray-900'
+              : 'border-gray-200 text-gray-500 hover:border-gray-400'
+          }`}
+        >
+          Names only
+        </button>
+      </div>
 
       {/* Progress bar */}
       <div className="h-1 bg-gray-200 rounded-full overflow-hidden">
