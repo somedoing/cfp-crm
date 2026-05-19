@@ -197,7 +197,7 @@ export default function OutreachCard({ action, userId, today, onActionUpdate }: 
         assigned_to: 'sender',
         assigned_user_id: userId,
         priority: action.priority,
-        status: 'Not started',
+        status: 'To Contact',
         due_date: followUpDate,
       })
     }
