@@ -161,14 +161,22 @@ export default function OutreachCard({ action, userId, today, onActionUpdate }: 
     onActionUpdate(action.id, { status: 'Waiting on response', due_date: followUpDue })
   }
 
-  // Log a response from the contact — mark done, update pipeline
+  // Map sender outcome to an admin-visible pipeline status
+  function outcomeToStatus(o: string): string {
+    if (['Yes', 'Maybe', 'Needs more info'].includes(o)) return 'Positive Response'
+    if (o === 'No') return 'Declined'
+    if (o === 'No response') return 'Unresponsive'
+    return 'Done' // Wrong contact, Do not contact
+  }
+
+  // Log a response from the contact — update pipeline with meaningful status
   async function logResponse() {
     if (!outcome) return
     setSaving(true)
     const today = new Date().toISOString().split('T')[0]
 
     await supabase.from('actions').update({
-      status: 'Done',
+      status: outcomeToStatus(outcome),
       outcome,
       completed_date: today,
       follow_up_needed: followUp,
@@ -208,7 +216,7 @@ export default function OutreachCard({ action, userId, today, onActionUpdate }: 
     }
 
     setSaving(false)
-    onActionUpdate(action.id, { status: 'Done' })
+    onActionUpdate(action.id, { status: outcomeToStatus(outcome) })
   }
 
   const location = [contact.town, contact.state].filter(Boolean).join(', ')
