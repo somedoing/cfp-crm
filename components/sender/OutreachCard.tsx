@@ -51,7 +51,7 @@ type Interaction = {
   direction: string | null
 }
 
-const OUTCOMES = ['Yes', 'Maybe', 'No', 'No response', 'Needs more info', 'Wrong contact', 'Do not contact']
+const OUTCOMES = ['Positive Response', 'Committed', 'Declined', 'Unresponsive', 'Done']
 
 const METHODS = [
   { label: 'Emailed them',       type: 'Email'     },
@@ -89,14 +89,10 @@ function stageUpdatesForOutreach(contact: Contact) {
 
 function stageUpdatesForOutcome(outcome: string, contact: Contact) {
   const updates: Record<string, unknown> = {}
-  if (outcome === 'Do not contact') {
-    updates.do_not_contact = true
-    return updates
-  }
-  if (['Yes', 'Maybe'].includes(outcome)) {
+  if (['Positive Response', 'Committed'].includes(outcome)) {
     if (contact.is_volunteer) updates.volunteer_stage = 'Interested'
     if (contact.is_donor) updates.donor_stage = 'Pledged'
-  } else if (outcome === 'No') {
+  } else if (outcome === 'Declined') {
     if (contact.is_volunteer) updates.volunteer_stage = 'Not a fit'
     if (contact.is_donor) updates.donor_stage = 'Lapsed'
   }
@@ -161,22 +157,14 @@ export default function OutreachCard({ action, userId, today, onActionUpdate }: 
     onActionUpdate(action.id, { status: 'Waiting on response', due_date: followUpDue })
   }
 
-  // Map sender outcome to an admin-visible pipeline status
-  function outcomeToStatus(o: string): string {
-    if (['Yes', 'Maybe', 'Needs more info'].includes(o)) return 'Positive Response'
-    if (o === 'No') return 'Declined'
-    if (o === 'No response') return 'Unresponsive'
-    return 'Done' // Wrong contact, Do not contact
-  }
-
-  // Log a response from the contact — update pipeline with meaningful status
+  // Log a response from the contact — outcome is the admin pipeline status directly
   async function logResponse() {
     if (!outcome) return
     setSaving(true)
     const today = new Date().toISOString().split('T')[0]
 
     await supabase.from('actions').update({
-      status: outcomeToStatus(outcome),
+      status: outcome,
       outcome,
       completed_date: today,
       follow_up_needed: followUp,
@@ -216,7 +204,7 @@ export default function OutreachCard({ action, userId, today, onActionUpdate }: 
     }
 
     setSaving(false)
-    onActionUpdate(action.id, { status: outcomeToStatus(outcome) })
+    onActionUpdate(action.id, { status: outcome })
   }
 
   const location = [contact.town, contact.state].filter(Boolean).join(', ')
