@@ -17,7 +17,7 @@ export default async function SenderPreviewUserPage({ params }: { params: Promis
         notes, priority, status, due_date,
         contact:contacts(
           full_name, display_id, email, phone, notes,
-          town, state,
+          date_added, town, state,
           volunteer_stage, donor_stage,
           original_source_form, is_volunteer, is_donor, is_signature_collector
         )
