@@ -46,7 +46,7 @@ type Action = {
   due_date: string | null
   sent_at: string | null
   updated_at: string
-  contact: { id: string; full_name: string; email: string; date_added: string } | null
+  contact: { id: string; full_name: string; email: string; date_added: string; display_id: string | null } | null
   org: { id: string; name: string; org_type: string } | null
 }
 
@@ -94,7 +94,11 @@ export default function ActionKanban({
         map[col.key].sort((a, b) => {
           const dateA = a.contact?.date_added ?? a.updated_at ?? ''
           const dateB = b.contact?.date_added ?? b.updated_at ?? ''
-          return dateB.localeCompare(dateA)
+          const dateCmp = dateB.localeCompare(dateA)
+          if (dateCmp !== 0) return dateCmp
+          const idA = a.contact?.display_id ?? ''
+          const idB = b.contact?.display_id ?? ''
+          return idB.localeCompare(idA)
         })
       } else if (col.key !== 'closed') {
         map[col.key].sort((a, b) => (PRIORITY_ORDER[a.priority] ?? 3) - (PRIORITY_ORDER[b.priority] ?? 3))

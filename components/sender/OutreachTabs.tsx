@@ -31,7 +31,11 @@ export default function OutreachTabs({
     .sort((a: any, b: any) => {
       const dateA = a.contact?.date_added ?? a.updated_at ?? ''
       const dateB = b.contact?.date_added ?? b.updated_at ?? ''
-      return dateB.localeCompare(dateA)
+      const dateCmp = dateB.localeCompare(dateA)
+      if (dateCmp !== 0) return dateCmp
+      const idA = a.contact?.display_id ?? ''
+      const idB = b.contact?.display_id ?? ''
+      return idB.localeCompare(idA)
     })
 
   const waiting = active.filter(a =>
