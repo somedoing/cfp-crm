@@ -14,7 +14,7 @@ export default async function SenderPreviewUserPage({ params }: { params: Promis
       .from('actions')
       .select(`
         id, contact_id, action_type, action_area, suggested_ask, suggested_message,
-        notes, priority, status, due_date,
+        notes, priority, status, due_date, sort_order,
         contact:contacts(
           full_name, display_id, email, phone, notes,
           date_added, town, state,

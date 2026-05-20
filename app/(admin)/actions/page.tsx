@@ -7,12 +7,12 @@ export default async function ActionsPage() {
   const [{ data: openActions }, { data: closedActions }, { data: profiles }] = await Promise.all([
     supabase
       .from('actions')
-      .select('id, title, priority, action_type, action_area, assigned_to, assigned_user_id, status, due_date, sent_at, updated_at, contact:contacts(id, full_name, email, date_added, display_id), org:organizations(id, name, org_type)')
+      .select('id, title, priority, action_type, action_area, assigned_to, assigned_user_id, status, due_date, sent_at, updated_at, sort_order, contact:contacts(id, full_name, email, date_added, display_id), org:organizations(id, name, org_type)')
       .not('status', 'in', '("Done","Committed","Declined","Unresponsive","Dropped","Skipped")')
       .order('due_date', { ascending: true, nullsFirst: false }),
     supabase
       .from('actions')
-      .select('id, title, priority, action_type, action_area, assigned_to, assigned_user_id, status, due_date, sent_at, updated_at, contact:contacts(id, full_name, email, date_added, display_id), org:organizations(id, name, org_type)')
+      .select('id, title, priority, action_type, action_area, assigned_to, assigned_user_id, status, due_date, sent_at, updated_at, sort_order, contact:contacts(id, full_name, email, date_added, display_id), org:organizations(id, name, org_type)')
       .in('status', ['Done', 'Committed', 'Declined', 'Unresponsive', 'Dropped', 'Skipped'])
       .order('due_date', { ascending: false, nullsFirst: false })
       .limit(50),

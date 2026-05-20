@@ -46,6 +46,7 @@ type Action = {
   due_date: string | null
   sent_at: string | null
   updated_at: string
+  sort_order: number | null
   contact: { id: string; full_name: string; email: string; date_added: string; display_id: string | null } | null
   org: { id: string; name: string; org_type: string } | null
 }
@@ -90,8 +91,12 @@ export default function ActionKanban({
     for (const a of actions) map[getColKey(a)].push(a)
     for (const col of COLUMNS) {
       if (col.key === 'queued') {
-        // Newest contact first so fresh leads are at the top
         map[col.key].sort((a, b) => {
+          // Manually ordered items first
+          if (a.sort_order !== null && b.sort_order !== null) return a.sort_order - b.sort_order
+          if (a.sort_order !== null) return -1
+          if (b.sort_order !== null) return 1
+          // Unsorted: newest contact first
           const dateA = a.contact?.date_added ?? a.updated_at ?? ''
           const dateB = b.contact?.date_added ?? b.updated_at ?? ''
           const dateCmp = dateB.localeCompare(dateA)
@@ -110,6 +115,22 @@ export default function ActionKanban({
   async function onDragEnd(result: DropResult) {
     if (!result.destination) return
     const { draggableId: actionId, source, destination } = result
+
+    // Reorder within To Contact
+    if (source.droppableId === 'queued' && destination.droppableId === 'queued') {
+      if (source.index === destination.index) return
+      const items = [...byColumn['queued']]
+      const [moved] = items.splice(source.index, 1)
+      items.splice(destination.index, 0, moved)
+      const upsertData = items.map((item, i) => ({ id: item.id, sort_order: i + 1 }))
+      setActions(prev => prev.map(a => {
+        const u = upsertData.find(x => x.id === a.id)
+        return u ? { ...a, sort_order: u.sort_order } : a
+      }))
+      await supabase.from('actions').upsert(upsertData, { onConflict: 'id' })
+      return
+    }
+
     if (source.droppableId === destination.droppableId) return
 
     const col = COLUMNS.find(c => c.key === destination.droppableId)
@@ -127,8 +148,10 @@ export default function ActionKanban({
       d.setDate(d.getDate() + 5)
       updates.due_date = d.toISOString().split('T')[0]
     }
-    // When moving OUT of the queued column, clear the assigned user
-    if (col.key !== 'queued') updates.assigned_user_id = null
+    if (col.key !== 'queued') {
+      updates.assigned_user_id = null
+      updates.sort_order = null
+    }
 
     patch(actionId, updates as any)
     await supabase.from('actions').update(updates).eq('id', actionId)

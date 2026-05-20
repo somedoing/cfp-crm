@@ -29,8 +29,13 @@ export default function OutreachTabs({
   const toContact = active
     .filter(a => a.status !== 'Waiting on response' && a.status !== 'Contacted' && a.status !== 'Follow-up')
     .sort((a: any, b: any) => {
-      const dateA = a.contact?.date_added ?? a.updated_at ?? ''
-      const dateB = b.contact?.date_added ?? b.updated_at ?? ''
+      // Admin-defined order first
+      if (a.sort_order != null && b.sort_order != null) return a.sort_order - b.sort_order
+      if (a.sort_order != null) return -1
+      if (b.sort_order != null) return 1
+      // Fallback: newest contact first
+      const dateA = a.contact?.date_added ?? ''
+      const dateB = b.contact?.date_added ?? ''
       const dateCmp = dateB.localeCompare(dateA)
       if (dateCmp !== 0) return dateCmp
       const idA = a.contact?.display_id ?? ''
