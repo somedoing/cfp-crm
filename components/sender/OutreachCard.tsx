@@ -51,7 +51,7 @@ type Interaction = {
   direction: string | null
 }
 
-const OUTCOMES = ['Positive Response', 'Committed', 'Declined', 'Unresponsive', 'Done']
+const OUTCOMES = ['Positive Response', 'Declined', 'Unresponsive', 'Done']
 
 const METHODS = [
   { label: 'Emailed them',       type: 'Email'     },
@@ -89,7 +89,7 @@ function stageUpdatesForOutreach(contact: Contact) {
 
 function stageUpdatesForOutcome(outcome: string, contact: Contact) {
   const updates: Record<string, unknown> = {}
-  if (['Positive Response', 'Committed'].includes(outcome)) {
+  if (outcome === 'Positive Response') {
     if (contact.is_volunteer) updates.volunteer_stage = 'Interested'
     if (contact.is_donor) updates.donor_stage = 'Pledged'
   } else if (outcome === 'Declined') {
