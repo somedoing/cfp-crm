@@ -21,16 +21,28 @@ export default function OutreachTabs({
     setActions(prev => prev.map(a => a.id === id ? { ...a, ...updates } : a))
   }
 
-  const active    = actions.filter(a => !['Done', 'Dropped', 'Skipped'].includes(a.status))
+  const active = actions.filter(a =>
+    !['Done', 'Dropped', 'Skipped', 'Committed', 'Declined', 'Unresponsive',
+      'Positive Response', 'Needs Review', 'Supporter', 'Active', 'Core'].includes(a.status)
+  )
+
   const toContact = active
-    .filter(a => a.status !== 'Waiting on response')
+    .filter(a => a.status !== 'Waiting on response' && a.status !== 'Contacted' && a.status !== 'Follow-up')
     .sort((a: any, b: any) => {
       const dateA = a.contact?.date_added ?? a.updated_at ?? ''
       const dateB = b.contact?.date_added ?? b.updated_at ?? ''
       return dateB.localeCompare(dateA)
     })
-  const waiting   = active.filter(a => a.status === 'Waiting on response' && a.due_date && a.due_date > today)
-  const followUp  = active.filter(a => a.status === 'Waiting on response' && (!a.due_date || a.due_date <= today))
+
+  const waiting = active.filter(a =>
+    (a.status === 'Contacted' || a.status === 'Waiting on response') &&
+    a.due_date && a.due_date > today
+  )
+
+  const followUp = active.filter(a =>
+    a.status === 'Follow-up' ||
+    ((a.status === 'Contacted' || a.status === 'Waiting on response') && (!a.due_date || a.due_date <= today))
+  )
 
   const current = tab === 'to-contact' ? toContact : tab === 'waiting' ? waiting : followUp
 
