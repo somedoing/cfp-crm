@@ -23,7 +23,7 @@ export default async function OutreachPage() {
         )
       `)
       .eq('assigned_user_id', user?.id ?? '')
-      .not('status', 'in', '("Done","Dropped","Skipped","Committed","Declined","Unresponsive","Positive Response")')
+      .not('status', 'in', '("Done","Dropped","Skipped","Committed","Declined","Unresponsive","Positive Response","Responded","Needs Review","Supporter","Active","Core")')
       .order('due_date', { ascending: true, nullsFirst: false })
 
     if (!error && data) actions = data
