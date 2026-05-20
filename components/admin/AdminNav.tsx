@@ -15,6 +15,7 @@ const navItems = [
   { href: '/my-pipeline', label: 'My Pipeline' },
   { href: '/contacts/merge', label: 'Dedup' },
   { href: '/imports', label: 'Imports' },
+  { href: '/sender-preview', label: 'Sender View' },
   { href: '/team', label: 'Team' },
   { href: '/templates', label: 'Templates' },
 ]
