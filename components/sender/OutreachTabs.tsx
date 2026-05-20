@@ -22,7 +22,13 @@ export default function OutreachTabs({
   }
 
   const active    = actions.filter(a => !['Done', 'Dropped', 'Skipped'].includes(a.status))
-  const toContact = active.filter(a => a.status !== 'Waiting on response')
+  const toContact = active
+    .filter(a => a.status !== 'Waiting on response')
+    .sort((a: any, b: any) => {
+      const dateA = a.contact?.date_added ?? a.updated_at ?? ''
+      const dateB = b.contact?.date_added ?? b.updated_at ?? ''
+      return dateB.localeCompare(dateA)
+    })
   const waiting   = active.filter(a => a.status === 'Waiting on response' && a.due_date && a.due_date > today)
   const followUp  = active.filter(a => a.status === 'Waiting on response' && (!a.due_date || a.due_date <= today))
 
