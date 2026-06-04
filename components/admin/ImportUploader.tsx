@@ -14,6 +14,7 @@ import { Badge } from '@/components/ui/badge'
 const SOURCE_FORMS = [
   'Squarespace Contacts Export',
   'Volunteer Interest Form',
+  'Volunteer Tracker / Master List',
   'Signature Collector Signup',
   'Newsletter Signup',
   'Donation Form',
@@ -50,6 +51,7 @@ const CRM_FIELDS = [
   { value: 'is_supporter', label: 'Is Supporter (true/false)' },
   { value: 'is_signature_collector', label: 'Is Signature Collector (true/false)' },
   { value: 'is_media_contact', label: 'Is Media Contact (true/false)' },
+  { value: 'contacted_flag', label: 'Contacted? (Yes/No) → sets volunteer stage to Contacted' },
   { value: 'volunteer_stage', label: 'Volunteer Stage' },
   { value: 'donor_stage', label: 'Donor Stage' },
   { value: 'support_level', label: 'Support Level (1–5)' },
@@ -111,6 +113,10 @@ function guessFieldMapping(columnName: string, sampleValue?: string): string {
   if (col.startsWith('america/') || col.startsWith('us/') || col.startsWith('utc')) return 'date_added'
   if (col === 'email') return 'email'
   if (col === 'name') return 'full_name'
+  if (col === 'date') return 'date_added'
+  if (col === 'town / location' || col === 'town/location') return 'town'
+  if (col === 'contacted?' || col === 'contacted') return 'contacted_flag'
+  if (col.includes('offered to help') || col.includes('how they can help') || col.includes('how can they help')) return 'notes'
   if (col === 'first name' || col === 'first_name' || col === 'firstname') return 'first_name'
   if (col === 'last name' || col === 'last_name' || col === 'lastname') return 'last_name'
   // Shipping = physical address → map to CRM fields
@@ -243,6 +249,7 @@ function applyFieldMap(row: ParsedRow, fieldMap: FieldMap, sourceForm: string): 
     updated_at: new Date().toISOString(),
   }
   const notesParts: string[] = []
+  let contactedFlagVal = ''
 
   for (const [csvCol, crmField] of Object.entries(fieldMap)) {
     const val = row[csvCol] ?? ''
@@ -306,6 +313,9 @@ function applyFieldMap(row: ParsedRow, fieldMap: FieldMap, sourceForm: string): 
       case 'subscriber_source':
         if (val) notesParts.push(`Squarespace source: ${val}`)
         break
+      case 'contacted_flag':
+        contactedFlagVal = val
+        break
       case 'newsletter_subscriber':
       case 'is_volunteer':
       case 'is_donor':
@@ -323,10 +333,19 @@ function applyFieldMap(row: ParsedRow, fieldMap: FieldMap, sourceForm: string): 
 
   // Source-form role defaults (for non-Squarespace forms)
   if (sourceForm === 'Volunteer Interest Form') { contact.is_volunteer = true; if (!contact.volunteer_stage) contact.volunteer_stage = 'New' }
+  if (sourceForm === 'Volunteer Tracker / Master List') { contact.is_volunteer = true; if (!contact.volunteer_stage) contact.volunteer_stage = 'New' }
   if (sourceForm === 'Signature Collector Signup') { contact.is_volunteer = true; contact.is_signature_collector = true; if (!contact.signature_stage) contact.signature_stage = 'New lead' }
   if (sourceForm === 'Newsletter Signup') { contact.newsletter_subscriber = true; contact.email_opt_in = true }
   if (sourceForm === 'Donation Form' || sourceForm === 'Donorbox Export') { contact.is_donor = true; contact.donor_stage = (contact.donor_stage as string) ?? 'Donated' }
   if (sourceForm === 'Pledge Form') { contact.is_volunteer = true; if (!contact.volunteer_stage) contact.volunteer_stage = 'New' }
+
+  // If the CSV had a Contacted? column, override the stage to Contacted (unless already more advanced)
+  if (contactedFlagVal && boolVal(contactedFlagVal)) {
+    const advancedStages = ['Interested', 'Asked', 'Assigned', 'Active', 'Reliable', 'Lead', 'Paused', 'Inactive', 'Not a fit']
+    if (!contact.volunteer_stage || !advancedStages.includes(contact.volunteer_stage as string)) {
+      contact.volunteer_stage = 'Contacted'
+    }
+  }
 
   // NH town detection: if no town found, check notes for NH town names
   if (!contact.town && contact.notes) {
