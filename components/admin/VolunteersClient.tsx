@@ -131,7 +131,8 @@ export default function VolunteersClient({ volunteers: initial }: { volunteers: 
 
     const group = FILTER_GROUPS.find(g => g.key === groupFilter)
     if (group && 'stages' in group) {
-      result = result.filter(v => group.stages.includes(v.volunteer_stage ?? 'New'))
+      const stages = (group as { stages: string[] }).stages
+      result = result.filter(v => stages.includes(v.volunteer_stage ?? 'New'))
     }
     if (townFilter) result = result.filter(v => v.town === townFilter)
     if (q) result = result.filter(v => {
