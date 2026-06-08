@@ -111,6 +111,8 @@ export default function VolunteersClient({ volunteers: initial }: { volunteers: 
   const [logForms, setLogForms] = useState<Record<string, LogForm>>({})
   const [savingLog, setSavingLog] = useState<string | null>(null)
   const [savingStage, setSavingStage] = useState<string | null>(null)
+  const [sortCol, setSortCol] = useState<'stage' | 'discord' | 'last_contact' | 'name'>('stage')
+  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc')
 
   // ─── Derived data ──────────────────────────────────────────────────────────
 
@@ -148,16 +150,28 @@ export default function VolunteersClient({ volunteers: initial }: { volunteers: 
       )
     })
 
-    const stageOrder = VOLUNTEER_STAGES
+    const discordScore = (v: Volunteer) =>
+      v.discord_stage === 'Introduced' ? 2 : v.in_discord ? 1 : 0
+
     return [...result].sort((a, b) => {
-      const ai = stageOrder.indexOf(a.volunteer_stage ?? 'New')
-      const bi = stageOrder.indexOf(b.volunteer_stage ?? 'New')
-      if (ai !== bi) return ai - bi
-      if (!a.last_contact_date && b.last_contact_date) return -1
-      if (a.last_contact_date && !b.last_contact_date) return 1
-      return (a.date_added ?? '') < (b.date_added ?? '') ? -1 : 1
+      let cmp = 0
+      if (sortCol === 'stage') {
+        cmp = VOLUNTEER_STAGES.indexOf(a.volunteer_stage ?? 'New') - VOLUNTEER_STAGES.indexOf(b.volunteer_stage ?? 'New')
+      } else if (sortCol === 'discord') {
+        cmp = discordScore(a) - discordScore(b)
+      } else if (sortCol === 'last_contact') {
+        // nulls (never contacted) sort to top in asc
+        if (!a.last_contact_date && b.last_contact_date) return sortDir === 'asc' ? -1 : 1
+        if (a.last_contact_date && !b.last_contact_date) return sortDir === 'asc' ? 1 : -1
+        cmp = (a.last_contact_date ?? '') < (b.last_contact_date ?? '') ? -1 : 1
+      } else if (sortCol === 'name') {
+        const na = a.full_name || [a.first_name, a.last_name].filter(Boolean).join(' ')
+        const nb = b.full_name || [b.first_name, b.last_name].filter(Boolean).join(' ')
+        cmp = na.localeCompare(nb)
+      }
+      return sortDir === 'asc' ? cmp : -cmp
     })
-  }, [volunteers, deferredSearch, groupFilter, townFilter])
+  }, [volunteers, deferredSearch, groupFilter, townFilter, sortCol, sortDir])
 
   // ─── Actions ───────────────────────────────────────────────────────────────
 
@@ -232,6 +246,20 @@ export default function VolunteersClient({ volunteers: initial }: { volunteers: 
       discord_stage: newStage,
       updated_at: new Date().toISOString(),
     }).eq('id', id)
+  }
+
+  function toggleSort(col: typeof sortCol) {
+    if (sortCol === col) {
+      setSortDir(d => d === 'asc' ? 'desc' : 'asc')
+    } else {
+      setSortCol(col)
+      setSortDir('asc')
+    }
+  }
+
+  function SortArrow({ col }: { col: typeof sortCol }) {
+    if (sortCol !== col) return <span className="text-gray-300 ml-1">↕</span>
+    return <span className="ml-1">{sortDir === 'asc' ? '↑' : '↓'}</span>
   }
 
   function toggleRow(id: string) {
@@ -334,11 +362,32 @@ export default function VolunteersClient({ volunteers: initial }: { volunteers: 
         <table className="w-full min-w-[700px]">
           <thead className="bg-gray-50 border-b border-gray-200">
             <tr>
-              <th className="text-left px-4 py-3 font-medium text-gray-500 text-sm">Volunteer</th>
+              <th
+                className="text-left px-4 py-3 font-medium text-gray-500 text-sm cursor-pointer hover:text-gray-800 select-none"
+                onClick={() => toggleSort('name')}
+              >
+                Volunteer <SortArrow col="name" />
+              </th>
               <th className="text-left px-4 py-3 font-medium text-gray-500 text-sm">Location</th>
               <th className="text-left px-4 py-3 font-medium text-gray-500 text-sm">Contact info</th>
-              <th className="text-left px-4 py-3 font-medium text-gray-500 text-sm w-36">Stage</th>
-              <th className="text-left px-4 py-3 font-medium text-gray-500 text-sm">Last reached</th>
+              <th
+                className="text-left px-4 py-3 font-medium text-gray-500 text-sm cursor-pointer hover:text-gray-800 select-none"
+                onClick={() => toggleSort('discord')}
+              >
+                Discord <SortArrow col="discord" />
+              </th>
+              <th
+                className="text-left px-4 py-3 font-medium text-gray-500 text-sm w-36 cursor-pointer hover:text-gray-800 select-none"
+                onClick={() => toggleSort('stage')}
+              >
+                Stage <SortArrow col="stage" />
+              </th>
+              <th
+                className="text-left px-4 py-3 font-medium text-gray-500 text-sm cursor-pointer hover:text-gray-800 select-none"
+                onClick={() => toggleSort('last_contact')}
+              >
+                Last reached <SortArrow col="last_contact" />
+              </th>
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-100">
@@ -421,6 +470,19 @@ export default function VolunteersClient({ volunteers: initial }: { volunteers: 
                       </div>
                     </td>
 
+                    <td className="px-4 py-3">
+                      {v.discord_stage === 'Introduced' ? (
+                        <span className="text-xs bg-purple-100 text-purple-700 border border-purple-300 px-2 py-0.5 rounded-full font-medium">Intro'd</span>
+                      ) : v.in_discord ? (
+                        <span className="text-xs bg-indigo-100 text-indigo-700 border border-indigo-300 px-2 py-0.5 rounded-full font-medium">Joined</span>
+                      ) : (
+                        <span className="text-xs text-gray-300">—</span>
+                      )}
+                      {v.discord_username && (
+                        <div className="text-xs text-gray-400 mt-0.5">@{v.discord_username}</div>
+                      )}
+                    </td>
+
                     <td className="px-4 py-3" onClick={e => e.stopPropagation()}>
                       <select
                         value={v.volunteer_stage ?? 'New'}
@@ -449,7 +511,7 @@ export default function VolunteersClient({ volunteers: initial }: { volunteers: 
                   {/* ── Expanded detail + log row ── */}
                   {isExpanded && (
                     <tr className="bg-gray-50">
-                      <td colSpan={5} className="px-4 pb-5 pt-0">
+                      <td colSpan={6} className="px-4 pb-5 pt-0">
                         <div className="border border-gray-200 rounded-xl bg-white p-5 space-y-5">
 
                           {/* Notes — most prominent */}
