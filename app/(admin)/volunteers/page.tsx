@@ -7,6 +7,7 @@ const FIELDS = [
   'volunteer_stage', 'is_active_volunteer', 'is_signature_collector',
   'last_contact_date', 'last_contact_summary',
   'notes', 'date_added', 'priority',
+  'in_discord', 'discord_stage', 'discord_username',
 ].join(', ')
 
 export default async function VolunteersPage() {

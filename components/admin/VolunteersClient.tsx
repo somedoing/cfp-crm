@@ -64,6 +64,9 @@ type Volunteer = {
   notes: string | null
   date_added: string | null
   priority: string | null
+  in_discord: boolean
+  discord_stage: string | null
+  discord_username: string | null
 }
 
 type LogForm = {
@@ -212,6 +215,25 @@ export default function VolunteersClient({ volunteers: initial }: { volunteers: 
     setSavingLog(null)
   }
 
+  async function handleDiscordToggle(id: string, value: boolean) {
+    setVolunteers(prev => prev.map(v => v.id === id ? { ...v, in_discord: value, discord_stage: value ? v.discord_stage : null } : v))
+    await supabase.from('contacts').update({
+      in_discord: value,
+      // Clear introduced status when removing from Discord
+      ...(value ? {} : { discord_stage: null }),
+      updated_at: new Date().toISOString(),
+    }).eq('id', id)
+  }
+
+  async function handleIntroducedToggle(id: string, value: boolean) {
+    const newStage = value ? 'Introduced' : null
+    setVolunteers(prev => prev.map(v => v.id === id ? { ...v, discord_stage: newStage } : v))
+    await supabase.from('contacts').update({
+      discord_stage: newStage,
+      updated_at: new Date().toISOString(),
+    }).eq('id', id)
+  }
+
   function toggleRow(id: string) {
     setExpandedRow(prev => prev === id ? null : id)
   }
@@ -350,6 +372,12 @@ export default function VolunteersClient({ volunteers: initial }: { volunteers: 
                         {v.is_signature_collector && (
                           <span className="text-xs bg-gray-100 text-gray-500 px-1.5 py-0.5 rounded">Sig</span>
                         )}
+                        {v.in_discord && (
+                          <span className="text-xs bg-indigo-100 text-indigo-700 px-1.5 py-0.5 rounded">Discord</span>
+                        )}
+                        {v.discord_stage === 'Introduced' && (
+                          <span className="text-xs bg-purple-100 text-purple-700 px-1.5 py-0.5 rounded">Intro'd</span>
+                        )}
                         <Link
                           href={`/contacts/${v.id}`}
                           onClick={e => e.stopPropagation()}
@@ -431,6 +459,35 @@ export default function VolunteersClient({ volunteers: initial }: { volunteers: 
                               <p className="text-sm text-gray-800 leading-relaxed whitespace-pre-wrap">{v.notes}</p>
                             ) : (
                               <p className="text-sm text-gray-400 italic">No notes recorded.</p>
+                            )}
+                          </div>
+
+                          {/* Discord status toggles */}
+                          <div className="flex flex-wrap gap-2 items-center border-t pt-4">
+                            <span className="text-xs text-gray-400 font-medium uppercase tracking-wide mr-1">Discord</span>
+                            <button
+                              onClick={() => handleDiscordToggle(v.id, !v.in_discord)}
+                              className={`text-xs px-3 py-1.5 rounded-lg border font-medium transition-colors ${
+                                v.in_discord
+                                  ? 'bg-indigo-100 text-indigo-700 border-indigo-300 hover:bg-indigo-200'
+                                  : 'bg-white text-gray-400 border-gray-200 hover:border-indigo-300 hover:text-indigo-600'
+                              }`}
+                            >
+                              {v.in_discord ? 'In Discord' : 'Not in Discord'}
+                            </button>
+                            <button
+                              onClick={() => v.in_discord && handleIntroducedToggle(v.id, v.discord_stage !== 'Introduced')}
+                              disabled={!v.in_discord}
+                              className={`text-xs px-3 py-1.5 rounded-lg border font-medium transition-colors disabled:opacity-40 disabled:cursor-not-allowed ${
+                                v.discord_stage === 'Introduced'
+                                  ? 'bg-purple-100 text-purple-700 border-purple-300 hover:bg-purple-200'
+                                  : 'bg-white text-gray-400 border-gray-200 hover:border-purple-300 hover:text-purple-600'
+                              }`}
+                            >
+                              {v.discord_stage === 'Introduced' ? 'Introduced' : 'Not introduced'}
+                            </button>
+                            {v.discord_username && (
+                              <span className="text-xs text-gray-400">@{v.discord_username}</span>
                             )}
                           </div>
 

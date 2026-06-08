@@ -126,6 +126,8 @@ export default function ContactDetail({
   const [savingInfo, setSavingInfo] = useState(false)
   const [infoSaved, setInfoSaved] = useState(false)
 
+  const [inDiscord, setInDiscord] = useState(initial.in_discord)
+  const [discordIntroduced, setDiscordIntroduced] = useState(initial.discord_stage === 'Introduced')
   const [volunteerStage, setVolunteerStageState] = useState(initial.volunteer_stage ?? '')
   const [donorStage, setDonorStageState] = useState(initial.donor_stage ?? '')
   const [priority, setPriorityState] = useState(initial.priority ?? '')
@@ -166,6 +168,24 @@ export default function ContactDetail({
     setSavingInfo(false)
     setInfoSaved(true)
     setTimeout(() => setInfoSaved(false), 2000)
+  }
+
+  async function handleDiscordToggle(value: boolean) {
+    setInDiscord(value)
+    if (!value) setDiscordIntroduced(false)
+    await supabase.from('contacts').update({
+      in_discord: value,
+      ...(value ? {} : { discord_stage: null }),
+      updated_at: new Date().toISOString(),
+    }).eq('id', initial.id)
+  }
+
+  async function handleIntroducedToggle(value: boolean) {
+    setDiscordIntroduced(value)
+    await supabase.from('contacts').update({
+      discord_stage: value ? 'Introduced' : null,
+      updated_at: new Date().toISOString(),
+    }).eq('id', initial.id)
   }
 
   async function handleVolunteerStage(val: string | null) {
@@ -333,8 +353,28 @@ export default function ContactDetail({
           {initial.is_press_contact && <Badge className="bg-orange-100 text-orange-700">Press</Badge>}
           {initial.is_media_contact && !initial.is_press_contact && <Badge className="bg-orange-100 text-orange-700">Media</Badge>}
           {initial.newsletter_subscriber && <Badge variant="secondary">Newsletter</Badge>}
-          {initial.in_discord && (
-            <Badge variant="secondary">Discord{initial.discord_username ? `: ${initial.discord_username}` : ''}</Badge>
+          <button
+            onClick={() => handleDiscordToggle(!inDiscord)}
+            className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium border transition-colors ${
+              inDiscord
+                ? 'bg-indigo-100 text-indigo-700 border-indigo-300 hover:bg-indigo-200'
+                : 'bg-white text-gray-400 border-gray-200 hover:border-indigo-300 hover:text-indigo-600'
+            }`}
+          >
+            {inDiscord ? 'In Discord' : '+ In Discord'}
+            {inDiscord && initial.discord_username && `: ${initial.discord_username}`}
+          </button>
+          {inDiscord && (
+            <button
+              onClick={() => handleIntroducedToggle(!discordIntroduced)}
+              className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium border transition-colors ${
+                discordIntroduced
+                  ? 'bg-purple-100 text-purple-700 border-purple-300 hover:bg-purple-200'
+                  : 'bg-white text-gray-400 border-gray-200 hover:border-purple-300 hover:text-purple-600'
+              }`}
+            >
+              {discordIntroduced ? 'Introduced' : '+ Introduced'}
+            </button>
           )}
           {initial.is_coalition_contact && <Badge variant="secondary">Coalition</Badge>}
           {initial.email_opt_in && <Badge variant="secondary">Email opt-in</Badge>}
