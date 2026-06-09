@@ -2,6 +2,7 @@
 
 import React, { useState, useMemo, useDeferredValue } from 'react'
 import { createClient } from '@/lib/supabase/client'
+import { WARNING_TAGS } from '@/lib/tags'
 import Link from 'next/link'
 
 // ─── Constants ────────────────────────────────────────────────────────────────
@@ -67,6 +68,7 @@ type Volunteer = {
   in_discord: boolean
   discord_stage: string | null
   discord_username: string | null
+  tags: string[] | null
 }
 
 type LogForm = {
@@ -426,6 +428,11 @@ export default function VolunteersClient({ volunteers: initial }: { volunteers: 
                         )}
                         {v.discord_stage === 'Introduced' && (
                           <span className="text-xs bg-purple-100 text-purple-700 px-1.5 py-0.5 rounded">Intro'd</span>
+                        )}
+                        {v.tags?.some(t => WARNING_TAGS.has(t)) && (
+                          <span className="text-xs bg-orange-100 text-orange-700 border border-orange-300 px-1.5 py-0.5 rounded font-medium">
+                            Handle with care
+                          </span>
                         )}
                         <Link
                           href={`/contacts/${v.id}`}

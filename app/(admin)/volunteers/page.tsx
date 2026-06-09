@@ -8,6 +8,7 @@ const FIELDS = [
   'last_contact_date', 'last_contact_summary',
   'notes', 'date_added', 'priority',
   'in_discord', 'discord_stage', 'discord_username',
+  'tags',
 ].join(', ')
 
 export default async function VolunteersPage() {

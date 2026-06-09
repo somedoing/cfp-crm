@@ -9,7 +9,7 @@ import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import Link from 'next/link'
-import { ALL_TAGS } from '@/lib/tags'
+import { ALL_TAGS, WARNING_TAGS } from '@/lib/tags'
 
 const VOLUNTEER_STAGES = ['New','Contacted','Interested','Asked','Assigned','Active','Reliable','Lead','Paused','Inactive','Not a fit']
 const DONOR_STAGES = ['Prospect','Not asked','Asked','Pledged','Donated','Thanked','Recurring','Lapsed','Do not solicit']
@@ -389,7 +389,11 @@ export default function ContactDetail({
               <button
                 key={tag}
                 onClick={() => removeTag(tag)}
-                className="flex items-center gap-1 px-2 py-0.5 rounded-full bg-blue-50 text-blue-700 border border-blue-200 text-xs hover:bg-red-50 hover:text-red-600 hover:border-red-200 transition-colors"
+                className={`flex items-center gap-1 px-2 py-0.5 rounded-full border text-xs transition-colors hover:bg-red-50 hover:text-red-600 hover:border-red-200 ${
+                  WARNING_TAGS.has(tag)
+                    ? 'bg-orange-100 text-orange-700 border-orange-300'
+                    : 'bg-blue-50 text-blue-700 border border-blue-200'
+                }`}
               >
                 {tag} <span className="opacity-60">×</span>
               </button>

@@ -9,4 +9,8 @@ export const ALL_TAGS = [
   'Recurring Donor',
   'Press',
   'Coalition',
+  'Handle with care',
 ] as const
+
+// Tags that get warning-level visual treatment
+export const WARNING_TAGS = new Set(['Handle with care'])
