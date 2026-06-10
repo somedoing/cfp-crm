@@ -180,9 +180,10 @@ export default function VolunteersClient({ volunteers: initial }: { volunteers: 
 
   async function handleStageChange(id: string, stage: string) {
     setSavingStage(id)
-    setVolunteers(prev => prev.map(v => v.id === id ? { ...v, volunteer_stage: stage } : v))
+    const value = stage === '' ? null : stage
+    setVolunteers(prev => prev.map(v => v.id === id ? { ...v, volunteer_stage: value } : v))
     await supabase.from('contacts').update({
-      volunteer_stage: stage,
+      volunteer_stage: value,
       updated_at: new Date().toISOString(),
     }).eq('id', id)
     setSavingStage(null)
@@ -493,13 +494,14 @@ export default function VolunteersClient({ volunteers: initial }: { volunteers: 
 
                     <td className="px-4 py-3" onClick={e => e.stopPropagation()}>
                       <select
-                        value={v.volunteer_stage ?? 'New'}
+                        value={v.volunteer_stage ?? ''}
                         onChange={e => handleStageChange(v.id, e.target.value)}
                         disabled={savingStage === v.id}
                         className={`text-xs font-medium px-2 py-1 rounded-full border cursor-pointer focus:outline-none transition-colors disabled:opacity-50 ${
-                          STAGE_COLORS[v.volunteer_stage ?? 'New'] ?? 'bg-gray-100 text-gray-600 border-gray-200'
+                          STAGE_COLORS[v.volunteer_stage ?? ''] ?? 'bg-gray-100 text-gray-400 border-gray-200'
                         }`}
                       >
+                        <option value="">—</option>
                         {VOLUNTEER_STAGES.map(s => (
                           <option key={s} value={s}>{s}</option>
                         ))}
