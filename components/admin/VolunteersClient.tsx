@@ -69,6 +69,7 @@ type Volunteer = {
   discord_stage: string | null
   discord_username: string | null
   tags: string[] | null
+  original_source_form: string | null
 }
 
 type LogForm = {
@@ -530,6 +531,16 @@ export default function VolunteersClient({ volunteers: initial }: { volunteers: 
                               <p className="text-sm text-gray-400 italic">No notes recorded.</p>
                             )}
                           </div>
+
+                          {/* Source */}
+                          {v.original_source_form && (
+                            <div className="border-t pt-4">
+                              <p className="text-xs text-gray-400 font-medium uppercase tracking-wide mb-1">Source</p>
+                              <span className="text-xs bg-gray-100 text-gray-600 px-2 py-1 rounded-md font-medium">
+                                {v.original_source_form}
+                              </span>
+                            </div>
+                          )}
 
                           {/* Discord status toggles */}
                           <div className="flex flex-wrap gap-2 items-center border-t pt-4">
