@@ -191,7 +191,11 @@ export default function ContactDetail({
   async function handleVolunteerStage(val: string | null) {
     if (!val) return
     setVolunteerStageState(val)
-    await saveField('volunteer_stage', val)
+    await supabase.from('contacts').update({
+      volunteer_stage: val,
+      is_volunteer: true,
+      updated_at: new Date().toISOString(),
+    }).eq('id', initial.id)
   }
 
   async function handleDonorStage(val: string | null) {
